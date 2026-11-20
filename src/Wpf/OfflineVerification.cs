@@ -189,9 +189,14 @@ namespace RoadRash.Workbench
                 "race setup keeps racer count separate from the AI rank repair");
             vm.Page = vm.Pages.Single(p => p.Title == settings.Strings.Get("page.fixes.title")); Pump(); surface.UpdateLayout();
             var rank = Descendants(surface).OfType<ComboBox>().Single(t => t.DataContext is Setting f && f.Key == "rankMode");
+            string stockSummary = vm.SummaryFix;
+            rank.SelectedIndex = 1; Pump();
+            Check(vm.SummaryFix == stockSummary, "recording stock timings leaves the enabled repair count at baseline");
             rank.SelectedIndex = 2; Pump();
-            Check(rank.IsEnabled && settings.I("rankMode") == 2 && rank.Items.Count == 4,
-                "Fix page offers all four rank choices and selects the 50 ms mode");
+            Check(rank.IsEnabled && settings.I("rankMode") == 2 && rank.Items.Count == 4 && vm.SummaryFix == "已启用 3 项修复",
+                "Fix page offers all four rank choices and counts the 50 ms optimization");
+            rank.SelectedIndex = 3; Pump();
+            Check(vm.SummaryFix == "已启用 3 项修复", "100 ms optimization counts as one repair");
             rank.SelectedIndex = 0;
             vm.Page = vm.Pages[0]; Pump(); surface.UpdateLayout();
             var police = Descendants(surface).OfType<Button>().Single(b=>Equals(b.CommandParameter,"police"));
