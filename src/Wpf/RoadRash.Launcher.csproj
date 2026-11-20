@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../VERSION').Trim())</Version>
+    <UseWindowsForms>true</UseWindowsForms>
+    <StartupObject>RoadRash.Workbench.Program</StartupObject>
+    <AssemblyName>RoadRash30thLauncher</AssemblyName>
+    <ApplicationManifest>../launcher.manifest</ApplicationManifest>
+    <ApplicationIcon>../../assets/workbench.ico</ApplicationIcon>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <DebugType>none</DebugType>
+    <!-- WPF owns the main window and uses the DPI declaration in its manifest. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <Compile Include="../*.cs" Exclude="../PatchBridge.cs" Link="Engine/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../config/launcher_settings.example.ini" LogicalName="FactoryDefaults.ini" />
+    <EmbeddedResource Include="../../assets/knockdown-hud.png" LogicalName="KnockdownHud.png" />
+    <EmbeddedResource Include="../../config/locales/zh-CN.json" LogicalName="Launcher.zh-CN.json" />
+    <Content Include="../../config/locales/zh-CN.json" Link="Tools/Locales/zh-CN.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="../../artifacts/bridge/RoadRash.PatchBridge.exe" Link="Tools/RoadRash.PatchBridge.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+</Project>
