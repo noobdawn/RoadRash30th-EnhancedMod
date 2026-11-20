@@ -32,7 +32,10 @@ if ($GameDirectory) {
     [IO.Directory]::CreateDirectory((Join-Path $fixture 'Tools')) | Out-Null
     $targets = @('RoadRash95.exe', 'TEXT\ENU.DLL', 'DATA\GLOBAL.RSC')
     for ($i = 0; $i -lt 3; $i++) { [IO.File]::WriteAllBytes((Join-Path $fixture $targets[$i]), [Convert]::FromBase64String($state.Baseline[$i])) }
-    Copy-Item -LiteralPath (Join-Path $game 'Tools\RoadRash30thEnhancement-v1.1.0.exe') -Destination (Join-Path $fixture 'Tools')
+    $enhancerPath = 'Tools\RoadRash30thEnhancement-v1.1.0.exe'
+    $enhancer = Join-Path ([IO.Path]::GetFullPath($BinaryDirectory)) $enhancerPath
+    if (-not (Test-Path -LiteralPath $enhancer -PathType Leaf)) { $enhancer = Join-Path $game $enhancerPath }
+    Copy-Item -LiteralPath $enhancer -Destination (Join-Path $fixture 'Tools')
     $before = @{}; foreach ($target in $targets) { $before[$target] = (Get-FileHash -LiteralPath (Join-Path $fixture $target)).Hash }
     $bridge = Join-Path ([IO.Path]::GetFullPath($BinaryDirectory)) 'Tools\RoadRash.PatchBridge.exe'
     $request = Join-Path $out 'factory-options.xml'

@@ -1,4 +1,4 @@
-﻿"""Create launcher-only and source ZIPs from explicit file lists. No game data."""
+﻿"""Package the modifier and its sources from explicit file lists."""
 import argparse
 import hashlib
 import json
@@ -35,7 +35,7 @@ SOURCE_FILES = (
     'third_party/licenses/Chinese-LICENSE.txt', 'third_party/licenses/HD-LICENSE.txt',
     'docs/development/wpf-workbench.md', 'docs/players/guide.txt', 'docs/history/stage-2026-11-17.md',
     'docs/development/character-features.md', 'docs/development/long-run.md', 'docs/images/gameplay.png',
-    'docs/history/compatibility-2026-11-17.md',
+    'docs/history/compatibility-2026-11-17.md', 'docs/releases/v0.5.1.md',
 )
 
 
@@ -77,6 +77,8 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--source-only', action='store_true', help='Package sources without requiring a compiled EXE.')
     mode.add_argument('--player-enhancer', type=Path, help='Make the player edition with the verified original v1.1.0 enhancer.')
+    mode.add_argument('--release-set', type=Path, metavar='ENHANCER',
+                      help='Write player, standalone and source ZIPs, checksums, and release notes for publication.')
     parser.add_argument('--binary-dir', type=Path, default=ROOT / 'artifacts/bin')
     parser.add_argument('--output-dir', type=Path, default=ROOT / 'artifacts/release')
     args = parser.parse_args()
@@ -84,6 +86,9 @@ def main():
     if not re.fullmatch(r'\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?', version):
         raise ValueError('Invalid VERSION')
     source = {name: (ROOT / name).read_bytes() for name in SOURCE_FILES}
+    release_notes = source[f'docs/releases/v{version}.md'] if args.release_set else None
+    enhancer_path = args.release_set or args.player_enhancer
+    runtime = None
     player = None
     if not args.source_only:
         executable = args.binary_dir / LAUNCHER
@@ -92,39 +97,43 @@ def main():
         binary = executable.read_bytes()
         if not binary.startswith(b'MZ'):
             raise ValueError('Build the Windows launcher before packaging')
-        player = {name: data for name, data in source.items()
-                  if name.startswith(('docs/', 'third_party/', 'dependencies/'))
-                  or name in ('README.md', 'LICENSE', 'THIRD_PARTY.md', 'CHANGELOG.md', 'VERSION')}
-        player.update({LAUNCHER: binary, LEGACY_ENTRY: (args.binary_dir / LEGACY_ENTRY).read_bytes(),
-                       'launcher_settings.example.ini': source['config/launcher_settings.example.ini'],
-                       'Tools/player_car.png': source['assets/player_car.png'],
-                       'Tools/import-knockdown-voice.py': source['scripts/import-knockdown-voice.py'],
-                       'Tools/Locales/zh-CN.json': source['config/locales/zh-CN.json']})
-        # Installation instructions are self-contained at the top of the runtime archive.
-        player['Tools/LAUNCHER_README.txt'] = source['docs/players/guide.txt']
+        runtime = {name: data for name, data in source.items()
+                   if name.startswith(('docs/', 'third_party/', 'dependencies/'))
+                   or name in ('README.md', 'CONTRIBUTING.md', 'LICENSE', 'THIRD_PARTY.md', 'CHANGELOG.md', 'VERSION')}
+        guide = source['docs/players/guide.txt']
+        runtime.update({LAUNCHER: binary, LEGACY_ENTRY: (args.binary_dir / LEGACY_ENTRY).read_bytes(),
+                        '安装说明.txt': guide, 'Tools/LAUNCHER_README.txt': guide,
+                        'launcher_settings.example.ini': source['config/launcher_settings.example.ini'],
+                        'Tools/player_car.png': source['assets/player_car.png'],
+                        'Tools/import-knockdown-voice.py': source['scripts/import-knockdown-voice.py'],
+                        'Tools/Locales/zh-CN.json': source['config/locales/zh-CN.json']})
         for name in ('Tools/RoadRash.PatchBridge.exe',
                      'Tools/licenses/CommunityToolkit-MVVM-LICENSE.txt',
                      'Tools/licenses/CommunityToolkit-THIRD-PARTY-NOTICES.txt',
                      'Tools/licenses/dotnet-runtime-LICENSE.txt',
                      'Tools/licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt',
                      'Tools/licenses/dotnet-desktop-LICENSE.txt'):
-            player[name] = (args.binary_dir / name).read_bytes()
-        if args.player_enhancer:
+            runtime[name] = (args.binary_dir / name).read_bytes()
+        if enhancer_path:
             name = 'RoadRash30thEnhancement-v1.1.0.exe'
             expected = json.loads(source['dependencies/verified-files.json'].decode('utf-8-sig'))['files'][name]
-            enhancer = args.player_enhancer.read_bytes()
+            enhancer = enhancer_path.read_bytes()
             if len(enhancer) != expected['bytes'] or digest(enhancer) != expected['sha256']:
                 raise ValueError('Player edition requires the verified v1.1.0 enhancer')
-            player = {n: data for n, data in player.items() if n.startswith(('Tools/', 'third_party/'))
-                      or n in (LAUNCHER, LEGACY_ENTRY, 'LICENSE', 'VERSION',
-                               'THIRD_PARTY.md', 'CHANGELOG.md', 'dependencies/verified-files.json')}
+            player = {n: data for n, data in runtime.items()
+                      if n.startswith(('Tools/', 'docs/', 'dependencies/', 'third_party/'))
+                      or n in (LAUNCHER, LEGACY_ENTRY, '安装说明.txt', 'LICENSE', 'VERSION', 'THIRD_PARTY.md', 'CHANGELOG.md')}
             player['Tools/' + name] = enhancer
-            player['安装说明.txt'] = source['docs/players/guide.txt']
-    make_zip(args.output_dir / ('RoadRash30th-EnhancedMod-' + version + '-source.zip'), source, version, 'source')
-    if args.player_enhancer:
-        make_zip(args.output_dir / ('暴力摩托增强修改器-' + version + '-玩家版.zip'), player, version, 'player')
-    elif player is not None:
-        make_zip(args.output_dir / ('RoadRash30th-EnhancedMod-' + version + '-launcher.zip'), player, version, 'launcher-only')
+    prefix = f'RoadRash30th-EnhancedMod-{version}'
+    make_zip(args.output_dir / (prefix + '-source.zip'), source, version, 'source')
+    if runtime is not None and not args.player_enhancer:
+        suffix = '-standalone.zip' if args.release_set else '-launcher.zip'
+        make_zip(args.output_dir / (prefix + suffix), runtime, version, 'launcher-only')
+    if player is not None:
+        filename = prefix + '-player.zip' if args.release_set else f'暴力摩托增强修改器-{version}-玩家版.zip'
+        make_zip(args.output_dir / filename, player, version, 'player')
+    if release_notes is not None:
+        (args.output_dir / '发布说明.md').write_bytes(release_notes)
 
 
 if __name__ == '__main__':

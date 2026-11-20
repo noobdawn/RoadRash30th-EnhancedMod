@@ -10,9 +10,7 @@
 
 ## 修改代码
 
-玩家操作说明位于 `docs/players/`，算法、架构及验证方法位于 `docs/development/`，历次阶段验收位于 `docs/history/`。通用安装与构建入口在根目录 README 中。
-
-本机已有依赖缓存时，可运行 `scripts/build.ps1 -Offline`。名次回归由 `scripts/test.ps1 -GameDirectory 游戏目录` 在测试进程中完成。如需补充实机数据，由玩家手动运行开发诊断并提供帧时间及 CSV。[名次诊断步骤](docs/development/rank-batching.md)
+玩家指南位于 `docs/players/`，每个正式版的发布说明位于 `docs/releases/`，架构与验证方法位于 `docs/development/`，历史验收记录位于 `docs/history/`。
 
 1. WPF 界面使用 .NET 10、C# 与 CommunityToolkit.Mvvm；共享的 `src/*.cs` 和兼容桥接仍须保持 Framework 4.x 编译器兼容。运行时补丁算法不应依赖界面对象。
 2. 常规修改执行 `scripts/build.ps1`、`scripts/test.ps1` 与 `scripts/test-wpf.ps1`；改动汽车选帧或 MIDI 解析时，加跑带 `-GameDirectory` 的对应集成验证。
@@ -21,3 +19,32 @@
 5. 有配置、使用方式或兼容性变化时同步更新文档与变更记录。新增发布文件需同步 `scripts/package.py` 的显式清单。
 
 提交说明应写清触发条件、改动后的行为、执行过的验证及剩余限制。贡献原创内容时请确认可按本项目 MIT 许可提供；第三方代码或素材需保留来源和自身许可。
+
+## 构建与离线验证
+
+在 Windows 上使用 .NET 10 SDK 和 .NET Framework 4.x 编译器。从源码根目录运行以下命令，将游戏路径改为本机安装位置。首次构建用 `.\scripts\build.ps1` 还原依赖。本机已有项目依赖缓存时可用离线模式。
+
+```powershell
+$gameDir = 'D:\Games\RoadRash'
+.\scripts\build.ps1 -Offline
+.\scripts\test.ps1 -GameDirectory $gameDir
+.\scripts\test-wpf.ps1 -RenderUi -GameDirectory $gameDir
+```
+
+构建产物在 `artifacts/bin/`。名次测试在测试进程中对照万人车阵的返回值。WPF 测试在离屏窗口检查默认值、旧设置迁移和两个中文入口，并使用游戏目录中已有的增强器备份创建隔离副本，核对应用与还原结果。实机比赛由玩家手动进行。[名次测试与实测记录](docs/development/rank-batching.md)
+
+## 准备发布附件
+
+确认 `VERSION`、变更记录与 `docs/releases/v<版本号>.md` 对应，并将新增文档加入 `scripts/package.py` 的源码清单。使用 Python 3.9+ 从已构建的文件一次生成附件。
+
+```powershell
+$version = (Get-Content .\VERSION -Raw).Trim()
+$out = ".\artifacts\release\v$version"
+py -3 .\scripts\package.py --release-set "$gameDir\Tools\RoadRash30thEnhancement-v1.1.0.exe" --output-dir $out
+```
+
+输出目录内有玩家版（`-player.zip`）、需自备增强器的独立修改器版（`-standalone.zip`）、源码（`-source.zip`），以及每份 ZIP 的 SHA-256 校验文件。`发布说明.md` 可直接用作 GitHub Release 正文。玩家版只接受大小和摘要均匹配的 v1.1.0 增强器。有关该文件的发布范围见[第三方说明](THIRD_PARTY.md)。
+
+将要发布的玩家版解压到新的空目录，把该路径传给 `scripts/test-wpf.ps1 -BinaryDirectory <解压目录> -RenderUi -GameDirectory $gameDir`，即可从附件复核两个入口及还原结果。校验 ZIP 可用 `Get-FileHash -Algorithm SHA256` 对照同名的 `.sha256.txt`。
+
+单独打包时，`--source-only` 仅生成源码，省略所有模式参数生成独立修改器和源码。`--player-enhancer <增强器路径>` 保留原有的中文玩家版包名。
