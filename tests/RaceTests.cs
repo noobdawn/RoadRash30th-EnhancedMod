@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 internal static partial class RaceTests
@@ -119,6 +120,9 @@ internal static partial class RaceTests
         CheckRunAiIntegration(path);
         CheckPavedRoad(path);
         CheckGuideCollision(path);
+        CheckGuideCollisionSweep(path);
+        CheckPackedRunStart(path, 128, 60);
+        CheckPackedRunStart(path, 9999, 1);
         CheckStart(image,code,bike,rider,other);
         CheckWorld(image,code,bike,rider,other);
         CheckRiderRoadGuard(path);
@@ -145,6 +149,7 @@ internal static partial class RaceTests
         Write(image+0x3882,new byte[]{0x33,0xC0,0xC3});Write(image+0x12CB,new byte[]{0xC3});
         RuntimePatch.ApplyRace(Process.GetCurrentProcess().Handle,image,true,2,3,96,delegate(string s){});
         RuntimePatch.ApplyFixes(Process.GetCurrentProcess().Handle,image,false,true,delegate(string s){});
+        RuntimePatch.ApplyTrafficDriving(Process.GetCurrentProcess().Handle,image,1,1,true,delegate {});
         Put(bike+0x2F4,2);Put(rider+0x80,0xFF0026);Put(rider+0xEC,4800);Put(image+0x2036E8,100);
         Run(code,image+0x13F80,rider);
         Check(Get(bike+0x2F4)==1&&Marshal.ReadByte(new IntPtr(rider+0x80))==0x22,"native traffic impact enters fallen state and hit animation");
@@ -254,8 +259,9 @@ internal static partial class RaceTests
         long image=MapGame(path),code=Alloc(0x4000),first=Alloc(0x1000),second=Alloc(0x1000),outcome=Alloc(0x1000);
         bool signature=true;for(int i=0;i<6;i++)signature &= Marshal.ReadByte(new IntPtr(image+RuntimePatch.RunGuideCollisionSite+i))==RuntimePatch.RunGuideCollisionOriginal[i];
         Check(signature,"installed game guide collision entry matches before original ram/contact hooks");
-        foreach(int target in new int[]{0x49616,0x496C2}) {
-            List<byte> stub=new List<byte>{0xC7,0x05};D(stub,outcome);D(stub,target==0x496C2?1:0);stub.Add(0xC3);Write(image+target,stub.ToArray());
+        int[] exits = { 0x49616, 0x496C2, 0x496D0 };
+        for(int i=0;i<exits.Length;i++) {
+            List<byte> stub=new List<byte>{0xC7,0x05};D(stub,outcome);D(stub,i);stub.Add(0xC3);Write(image+exits[i],stub.ToArray());
         }
         for(int scope=0;scope<3;scope++)for(int player=0;player<2;player++)for(int side=0;side<2;side++)foreach(int kind in new int[]{4,8,16})foreach(int state in new int[]{0,1,2,3}) {
             long selected=side==0?first:second,other=side==0?second:first;
@@ -268,10 +274,118 @@ internal static partial class RaceTests
             b.AddRange(new byte[]{0x89,0x1D});D(b,outcome+4);b.AddRange(new byte[]{0x89,0x35});D(b,outcome+8);b.AddRange(new byte[]{0x89,0x3D});D(b,outcome+12);b.AddRange(new byte[]{0x61,0x9D,0xC3});Write(code,b.ToArray());
             ((RunCode)Marshal.GetDelegateForFunctionPointer(new IntPtr(code),typeof(RunCode)))();
             bool skip=kind==4&&state==2&&(scope==2||(scope==0&&player==0)||(scope==1&&player==1));
-            Check(Get(outcome)==(skip?1:0)&&Get(outcome+4)==first&&Get(outcome+8)==second&&Get(outcome+12)==0x13572468,
+            int expectedExit = !skip ? 0 : (side==0 ? 2 : 1);
+            Check(Get(outcome)==expectedExit&&Get(outcome+4)==first&&Get(outcome+8)==second&&Get(outcome+12)==0x13572468,
                 "guide pair filter preserves real collisions and registers scope="+scope+" player="+player+" side="+side+" kind="+kind+" state="+state);
         }
     }
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate void RecordContact(IntPtr outer, IntPtr candidate);
+
+    static void CheckGuideCollisionSweep(string path) {
+        // All actors overlap. Record the ordered contacts produced by the real
+        // game's sweep, replacing only the contact response in this offline image.
+        int[] kinds = { 8, 4, 16, 4, 4, 8, 4, 4, 4 };
+        int[] states = { 2, 2, 0, 0, 2, 2, 1, 3, 2 };
+        const int stride = 0x320, player = 1, tick = 43;
+        long image = MapGame(path), code = Alloc(0x4000), actors = Alloc((kinds.Length + 1) * stride);
+        long chain = Alloc(0x1000), road = Alloc(0x1000);
+        Put(chain, chain + 0x100); Put(chain + 0x100, actors);
+        Put(image + 0x2036E8, tick); Put(image + 0x1A69EC, actors + player * stride);
+        Marshal.WriteByte(new IntPtr(road + 0x36), 3);
+        for (int i = 0; i < kinds.Length; i++) {
+            long actor = actors + i * stride;
+            Put(actor, actor + stride); Put(actor + 0x10, tick); Put(actor + 0x2C, road);
+            Put(actor + 0xC0, 7); Put(actor + 0xC4, kinds[i]); Put(actor + 0x2F4, states[i]);
+            Put(actor + 0x174, 32); Put(actor + 0x178, 32); Put(actor + 0x17C, 24);
+        }
+        var contacts = new List<int>();
+        RecordContact record = delegate(IntPtr first, IntPtr second) {
+            int i = (int)((first.ToInt64() - actors) / stride);
+            int j = (int)((second.ToInt64() - actors) / stride);
+            contacts.Add(i * kinds.Length + j);
+        };
+        var callback = new List<byte> { 0x56,0xFF,0x75,0xF8,0xB8 }; // candidate and outer
+        D(callback, Marshal.GetFunctionPointerForDelegate(record).ToInt64());
+        callback.AddRange(new byte[]{0xFF,0xD0});
+        Write(code + 0x2000, callback.ToArray());
+        Jump(code + 0x2000 + callback.Count, image + 0x496C2, 5);
+        Jump(image + 0x4968E, code + 0x2000, 5);
+        for (int scope = 0; scope < 3; scope++) {
+            Write(code + 0x1000, RuntimePatch.BuildRunGuideCollisionCode(image, code + 0x1000, scope));
+            Jump(image + RuntimePatch.RunGuideCollisionSite, code + 0x1000, 6);
+            var expected = new List<int>();
+            bool[] guide = new bool[kinds.Length];
+            for (int i = 0; i < kinds.Length; i++)
+                guide[i] = kinds[i] == 4 && states[i] == 2 && (scope == 2 || (scope == 1) == (i == player));
+            for (int i = 0; i < kinds.Length; i++)
+                for (int j = i + 1; j < kinds.Length; j++)
+                    if (!guide[i] && !guide[j]) expected.Add(i * kinds.Length + j);
+            contacts.Clear();
+            Run(code, image + 0x49590, chain);
+            Check(contacts.SequenceEqual(expected), "native mixed sweep preserves riders, traffic, recovering bikes and contact order; scope=" + scope);
+        }
+        GC.KeepAlive(record);
+    }
+    static void CheckPackedRunStart(string path, int packed, int ticks) {
+        // Start overlapping rows at rest, plus one runner clear of the pack.
+        // Use native chase, steering, and integer position updates without any
+        // collision response. This isolates decisions from contact impulses.
+        const int stride = 0x1000;
+        int count = packed + 1;
+        long image = MapGame(path), code = Alloc(0x4000), actors = Alloc(count * stride);
+        long road = Alloc(0x1000), ends = Alloc(0x1000), config;
+        StubAnimation(image);
+        long ai = RuntimePatch.PrepareRunAi(Process.GetCurrentProcess().Handle, image, 1, 2, 2, 2, 2, delegate {}, out config);
+        Put(config + 28, 1234567);
+        foreach (int offset in new int[] { 8, 12, 0x18, 0x1C }) Put(road + offset, road);
+        Put(road + 0x2C, 512); Put(road + 0x30, 512); Put(road + 0xE0, -500); Put(road + 0xE4, 500);
+        Marshal.WriteByte(new IntPtr(road + 0x36), 3);
+        Write(code + 0x800, RuntimePatch.BuildRecoveryCode(image, code + 0x800, 1, true, 2, 3, 96, ai, config));
+        Jump(image + RuntimePatch.RaceSites[1], code + 0x800, 11);
+        Write(code + 0x1000, RuntimePatch.BuildWalkSpeedCode(image, code + 0x1000, 3, 1, 1, ai, config));
+        Jump(image + RuntimePatch.CharacterSites[3], code + 0x1000, 10);
+        var bikes = new long[count]; var riders = new long[count]; var start = new int[count];
+        for (int i = 0; i < count; i++) {
+            bikes[i] = actors + i * stride; riders[i] = bikes[i] + 0x400;
+            start[i] = i == packed ? packed + 1024 : (i / 8) * 8;
+        }
+        foreach (int weave in new int[] { 0, 2 }) {
+            Marshal.Copy(new byte[count * stride], 0, new IntPtr(actors), count * stride);
+            Put(config + 24, weave);
+            for (int i = 0; i < count; i++) {
+                long b = bikes[i], r = riders[i], profile = b + 0x800;
+                Put(b + 0xC4, 4); Put(b + 0x2F4, 2); Put(b + 0x2F0, 1000); Put(b + 0x324, 2); Put(b + 0x2FC, r);
+                Put(r + 0xC4, 8); Put(r + 0xC0, 7); Put(r + 0x80, 0x26); Put(r + 0x18, 1);
+                Put(r + 0x1C4, b); Put(r + 0x1D8, profile); Put(r + 0x2C, road); Put(r + 0x140, road);
+                Put(r + 0x174, 12*256); Put(r + 0x178, 8); Put(r + 0x1C, start[i]); Put(r + 0x28, (i%8-4)*18*256);
+            }
+            int firstStep = 0;
+            bool guidesAhead = true;
+            for (int tick = 1; tick <= ticks; tick++) {
+                Put(image + 0x2036E8, tick);
+                long[] ordered = riders.OrderBy(r => Get(r + 0x1C)).ToArray();
+                for (int i = 0; i < count; i++) {
+                    Put(ordered[i], i+1 < count ? ordered[i+1] : ends);
+                    Put(ordered[i]+4, i > 0 ? ordered[i-1] : ends+16);
+                }
+                // Plan at the same tick, then advance the entire pack on the same straight road.
+                for (int i = 0; i < count; i++) {
+                    Run(code, image + 0x17C60, bikes[i]);
+                    guidesAhead &= Get(bikes[i]+0x1C) - Get(riders[i]+0x1C) == 96;
+                }
+                for (int i = 0; i < count; i++) Run(code, image + 0x4C8D0, riders[i]);
+                if (tick == 1) firstStep = Enumerable.Range(0, packed).Count(i => Get(riders[i]+0x1C) > start[i]);
+            }
+            int moved = Enumerable.Range(0, packed).Count(i => Get(riders[i]+0x1C) > start[i]);
+            int minimum = Enumerable.Range(0, packed).Min(i => Get(riders[i]+0x1C) - start[i]);
+            int lead = Get(riders[packed]+0x1C) - start[packed];
+            Console.WriteLine("PACK START weave={0} firstStep={1}/{2} advanced={3}/{2} minDistance={4} leaderDistance={5}", weave, firstStep, packed, moved, minimum, lead);
+            Check(guidesAhead && lead >= ticks, "pack and isolated leader retain forward chase targets; weave=" + weave);
+            Check(firstStep == packed && moved == packed && minimum >= ticks, "all packed runners make forward progress from rest at 1x; weave=" + weave);
+        }
+    }
+
     static void CheckPavedRoad(string path) {
         long image=MapGame(path),code=Alloc(0x4000),road=Alloc(0x1000),bike=Alloc(0x1000),rider=Alloc(0x1000),config;
         long ai=RuntimePatch.PrepareRunAi(Process.GetCurrentProcess().Handle,image,6,0,0,0,2,delegate(string s){},out config);
@@ -485,6 +599,7 @@ internal static partial class RaceTests
             for(int i=0;i<3;i++)Write(image+RuntimePatch.RaceSites[i],RuntimePatch.RaceOriginals[i]);
             for(int i=0;i<RuntimePatch.RaceWorldSites.Length;i++)Write(image+RuntimePatch.RaceWorldSites[i],RuntimePatch.RaceWorldOriginals[i]);
             Write(image+RuntimePatch.RunGuideCollisionSite,RuntimePatch.RunGuideCollisionOriginal);
+            Write(image+RuntimePatch.RunGuideEndPairs,RuntimePatch.RunGuideEndPairsOriginal);
             Write(image+RuntimePatch.FallAnimationSite,RuntimePatch.FallAnimationOriginal);
             Write(image+0x13B60,new byte[]{0x55,0x8B,0xEC,0x83,0xEC,0x34});
             RuntimePatch.ApplyRace(Process.GetCurrentProcess().Handle,image,false,2,0,96,delegate(string s){});
@@ -493,6 +608,10 @@ internal static partial class RaceTests
             try { RuntimePatch.ApplyRace(Process.GetCurrentProcess().Handle,image,true,2,3,96,delegate(string s){}); } catch(InvalidOperationException) { mismatch=true; }
             Check(mismatch&&Marshal.ReadByte(new IntPtr(image+0x66307))==0xE8,"all signatures checked before any installation");
             Write(image+0x19F4E,RuntimePatch.RaceOriginals[2]);
+            Write(image+RuntimePatch.RunGuideEndPairs,new byte[]{0xCC});mismatch=false;
+            try { RuntimePatch.ApplyRace(Process.GetCurrentProcess().Handle,image,true,2,3,96,delegate(string s){}); } catch(InvalidOperationException) { mismatch=true; }
+            Check(mismatch&&Marshal.ReadByte(new IntPtr(image+RuntimePatch.RunGuideCollisionSite))==0x8A,"unknown collision continuation rejected before installing the guide filter");
+            Write(image+RuntimePatch.RunGuideEndPairs,RuntimePatch.RunGuideEndPairsOriginal);
             Write(image+RuntimePatch.FallAnimationSite,new byte[]{0xCC});mismatch=false;
             RuntimePatch.ApplyFixes(Process.GetCurrentProcess().Handle,image,false,false,delegate(string s){});
             try { RuntimePatch.ApplyFixes(Process.GetCurrentProcess().Handle,image,false,true,delegate(string s){}); } catch(InvalidOperationException) { mismatch=true; }

@@ -35,7 +35,7 @@ SOURCE_FILES = (
     'third_party/licenses/Chinese-LICENSE.txt', 'third_party/licenses/HD-LICENSE.txt',
     'docs/development/wpf-workbench.md', 'docs/players/guide.txt', 'docs/history/stage-2026-11-17.md',
     'docs/development/character-features.md', 'docs/development/long-run.md', 'docs/images/gameplay.png',
-    'docs/history/compatibility-2026-11-17.md', 'docs/releases/v0.5.1.md',
+    'docs/history/compatibility-2026-11-17.md', 'docs/releases/v0.5.1.md', 'docs/releases/v0.5.2.md',
 )
 
 

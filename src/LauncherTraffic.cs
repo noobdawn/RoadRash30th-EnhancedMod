@@ -27,8 +27,8 @@ internal sealed partial class LauncherForm
             FlowLayoutPanel row=new FlowLayoutPanel{AutoSize=true,Dock=DockStyle.Top};
             row.Controls.Add(new Label{Text=names[i],AutoSize=true,Padding=new Padding(8)});row.Controls.Add(n);body.Controls.Add(row,0,i);
         }
-        crazyDrivers.Text="疯狂司机：频繁变道，可能驶上人行道";crazyDrivers.AutoSize=true;body.Controls.Add(crazyDrivers,0,2);
-        body.Controls.Add(Paragraph("1 倍为原速，0 为停止；可直接输入倍率，不设玩法上限。疯狂司机会在两侧车道和路肩间随机选线。适用于普通交通车，骑行和长跑均可使用。",Muted),0,3);
+        crazyDrivers.Text="疯狂司机";crazyDrivers.AutoSize=true;body.Controls.Add(crazyDrivers,0,2);
+        body.Controls.Add(Paragraph("1 倍为原速，0 为停止。疯狂司机按自己的路线在两侧车道和路肩间变道，遇到行人或选手也照常行驶。适用于同向和对向普通交通车。",Muted),0,3);
         group.Controls.Add(body);return group;
     }
 }
@@ -68,6 +68,23 @@ internal static partial class RuntimePatch
     }
     internal const int TrafficDriveSite=0x6A375;
     internal static readonly byte[] TrafficDriveOriginal={0x6B,0xC1,0x64,0x8B,0xCF};
+    private const int TrafficLookAhead = 0x69BFD, TrafficClearRoad = 0x6A0AF;
+    private static readonly byte[] TrafficLookAheadOriginal = { 0x83,0xBF,0xEC,0x01,0,0,0 };
+    private static readonly byte[] TrafficClearRoadOriginal = { 0x8B,0x75,0xF4,0x8B,0x9F,0xCC,0x01,0,0 };
+
+    private static byte[] BuildCrazyTrafficPlan(long image, long entry)
+    {
+        var c = new CodeBuffer(entry);
+        // Native update has already set the car's unobstructed cruise speed.
+        // EDI is the actor and ESI its direction. Only 0 and 2 use our driver.
+        B(c,0x83,0xBF); D(c,0xC4); B(c,16); Jcc(c,0x85,"original");
+        B(c,0xF7,0xC6); D(c,~2); Jcc(c,0x85,"original");
+        JmpAbs(c,image+TrafficClearRoad);
+        c.Label("original");
+        B(c,TrafficLookAheadOriginal);
+        JmpAbs(c,image+TrafficLookAhead+TrafficLookAheadOriginal.Length);
+        return c.Finish();
+    }
     internal static byte[] TrafficConfig(long image,long drivers,decimal same,decimal opposite,bool crazy,int seed)
     {
         if(same<0||opposite<0)throw new ArgumentOutOfRangeException("traffic speed");
@@ -94,6 +111,10 @@ internal static partial class RuntimePatch
     {
         if(same==1&&opposite==1&&!crazy)return;
         RequireMotionSignature(process,image+TrafficDriveSite,TrafficDriveOriginal);
+        if (crazy) {
+            RequireMotionSignature(process,image+TrafficLookAhead,TrafficLookAheadOriginal);
+            RequireMotionSignature(process,image+TrafficClearRoad,TrafficClearRoadOriginal);
+        }
         IntPtr block=VirtualAllocEx(process,IntPtr.Zero,(UIntPtr)0x3000,MemCommitReserve,PageExecuteReadWrite);
         if(block==IntPtr.Zero)throw new InvalidOperationException("无法分配交通驾驶代码区。");
         long code=block.ToInt64(),config=code+0x2000,cave=code+0x2100;
@@ -102,7 +123,19 @@ internal static partial class RuntimePatch
         if(TrafficDriveNative.Code.Length>0x2000)throw new InvalidOperationException("交通驾驶代码超出分配区。");
         Write(process,code,TrafficDriveNative.Code);Write(process,config,TrafficConfig(image,drivers.ToInt64(),same,opposite,crazy,Guid.NewGuid().GetHashCode()));
         Write(process,cave,BuildTrafficDriveCode(image,cave,code,config));
+        long plan = cave + 0x100;
+        if (crazy) Write(process,plan,BuildCrazyTrafficPlan(image,plan));
         Write(process,image+TrafficDriveSite,Jmp(image+TrafficDriveSite,cave,TrafficDriveOriginal.Length));
+        if (crazy) {
+            try {
+                Write(process,image+TrafficLookAhead,Jmp(image+TrafficLookAhead,plan,TrafficLookAheadOriginal.Length));
+            } catch {
+                try { Write(process,image+TrafficLookAhead,TrafficLookAheadOriginal); }
+                finally { Write(process,image+TrafficDriveSite,TrafficDriveOriginal); }
+                throw;
+            }
+            log("疯狂司机已启用。同向和对向交通车按自己的路线行驶，跳过前方交通避让判断。");
+        }
         log("交通驾驶：同向速度="+same+" 倍；对向速度="+opposite+" 倍；疯狂司机="+crazy+"。倍率仅在游戏整数速度溢出时饱和。");
     }
 }

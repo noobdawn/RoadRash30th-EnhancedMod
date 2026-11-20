@@ -45,6 +45,8 @@ internal static partial class RuntimePatch
     };
     internal const int RunGuideCollisionSite=0x49610;
     internal static readonly byte[] RunGuideCollisionOriginal={0x8A,0x86,0xC0,0,0,0};
+    internal const int RunGuideEndPairs = 0x496D0;
+    internal static readonly byte[] RunGuideEndPairsOriginal = { 0x8B,0x55,0xF4,0x8B,0x1B };
 
     internal static void ApplyRace(IntPtr process, long image, bool run, int scope, int recovery, int distance, Action<string> log, decimal playerSpeed = 1m, decimal aiSpeed = 1m, long aiCode = 0, long aiConfig = 0)
     {
@@ -56,6 +58,7 @@ internal static partial class RuntimePatch
             RequireMotionSignature(process, image + RvaCrashFunction, new byte[] { 0x55,0x8B,0xEC,0x83,0xEC,0x34 });
             for (int i=0;i<RaceWorldSites.Length;i++) RequireMotionSignature(process,image + RaceWorldSites[i],RaceWorldOriginals[i]);
             RequireMotionSignature(process,image+RunGuideCollisionSite,RunGuideCollisionOriginal);
+            RequireMotionSignature(process,image+RunGuideEndPairs,RunGuideEndPairsOriginal);
         }
         IntPtr block = VirtualAllocEx(process, IntPtr.Zero, (UIntPtr)0x4000, MemCommitReserve, PageExecuteReadWrite);
         if (block == IntPtr.Zero) throw new InvalidOperationException("无法分配长跑补丁代码区。");
@@ -71,7 +74,10 @@ internal static partial class RuntimePatch
         for (int i = 1; i < 3; i++) Write(process, cave + i * 0x800, BuildRecoveryCode(image, cave + i * 0x800, i, run, scope, recovery, distance,aiCode,aiConfig));
         for (int i = run ? 0 : 1; i < 3; i++) Write(process, image + RaceSites[i], Jmp(image + RaceSites[i], cave + i * 0x800, RaceOriginals[i].Length));
         if (run) for (int i=0;i<RaceWorldSites.Length;i++) Write(process,image + RaceWorldSites[i],Jmp(image + RaceWorldSites[i],cave + 0x2000 + i*0x400,RaceWorldOriginals[i].Length));
-        if(run)Write(process,image+RunGuideCollisionSite,Jmp(image+RunGuideCollisionSite,cave+0x3400,RunGuideCollisionOriginal.Length));
+        if (run) {
+            Write(process,image+RunGuideCollisionSite,Jmp(image+RunGuideCollisionSite,cave+0x3400,RunGuideCollisionOriginal.Length));
+            log("已启用长跑引导车碰撞优化。");
+        }
         log("比赛设置：长跑=" + run + "；范围=" + new string[] { "仅 AI", "仅玩家", "所有人" }[scope] + "；车辆领先=" + distance + "；超时恢复上车=" + new string[] { "所有人", "仅 AI", "仅玩家", "关闭" }[recovery]);
     }
 
@@ -86,11 +92,15 @@ internal static partial class RuntimePatch
             string next=side==0?"candidate":"original";
             B(c,0x83,0xBE);D(c,0xC4);B(c,4);Jcc(c,0x85,next);
             B(c,0x83,0xBE);D(c,0x2F4);B(c,2);Jcc(c,0x85,next);
-            RaceScope(c,image,scope,next);Jmp(c,"skip");
+            RaceScope(c,image,scope,next);
+            // No later candidate can collide with an outer guide. Advancing just
+            // the candidate here repeatedly walks the entire remaining actor list.
+            Jmp(c,side==0 ? "endPairs" : "nextCandidate");
             if(side==0){c.Label("candidate");B(c,0x89,0xFE);}
         }
         c.Label("original");B(c,0x61,0x9D);B(c,RunGuideCollisionOriginal);JmpAbs(c,image+RunGuideCollisionSite+6);
-        c.Label("skip");B(c,0x61,0x9D);JmpAbs(c,image+0x496C2);
+        c.Label("nextCandidate");B(c,0x61,0x9D);JmpAbs(c,image+0x496C2);
+        c.Label("endPairs");B(c,0x61,0x9D);JmpAbs(c,image+RunGuideEndPairs);
         return c.Finish();
     }
 

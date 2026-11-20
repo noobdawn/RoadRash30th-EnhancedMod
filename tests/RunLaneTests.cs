@@ -109,6 +109,23 @@ internal static class RunLaneTests
             Put(peer+0x108,3600);tick+=6;
             Check(Speed(Sample(0))<7200&&Speed(Sample(0))>=3600,"slower runner ahead limits closing speed rather than stopping the pack");
             Put(peer+0x108,0);
+            long peerBike=Alloc(0x1000);
+            Put(peer+0x1c4,peerBike);Put(peerBike+0xc4,4);Put(peerBike+0x2f4,2);
+            Put(config+8,1200);
+            foreach (int z in new int[] { -4, 0 }) {
+                Put(peer+0x1c,z);tick+=6;
+                Check(Speed(Sample(0))==1200,"an overlapping peer beside or behind does not cap forward pace; z="+z);
+            }
+            Put(peer+0x1c,4);tick+=6;
+            int following=Speed(Sample(0));
+            Check(following>=500&&following<1200,"yielding to a runner ahead retains a native forward step at 1x");
+            Put(config+8,120);tick+=6;
+            Check(Speed(Sample(0))==120,"crowd yielding respects a deliberately low base pace");
+            Put(config+8,1200);Put(peerBike+0x2f4,1);tick+=6;
+            Check(Speed(Sample(0))==180,"a fallen rider retains ordinary obstacle braking");
+            Put(peerBike+0x2f4,2);Put(peer+0xc0,7|16);tick+=6;
+            Check(Speed(Sample(0))==180,"a finished rider retains ordinary obstacle braking");
+            Put(peer+0xc0,7);Put(peer+0x1c,60);Put(config+8,7200);
             long fork=Alloc(0x1000);Put(fork+0x36,2);Put(road+0x36,1);Put(peer+0x2C,fork);Put(peer+0x174,1000*256);tick+=6;
             Check(Speed(Sample(0))==7200,"objects on a separate branch do not block this corridor");Put(road+0x36,3);
             // Traffic is intentionally risky: close the pursuit loop and verify

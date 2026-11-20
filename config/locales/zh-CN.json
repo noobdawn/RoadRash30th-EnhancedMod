@@ -284,7 +284,7 @@
   "setting.oppositeTrafficSpeed.label": "对向车辆速度",
   "setting.oppositeTrafficSpeed.description": "倍 · 1 为原速，0 为停止，不设玩法倍率上限",
   "setting.crazyDrivers.label": "疯狂司机",
-  "setting.crazyDrivers.description": "大幅提高变道几率，车辆也可能驶上人行道。",
+  "setting.crazyDrivers.description": "同向和对向交通车随机变道，可能冲上路肩。遇到行人或选手也照常行驶。",
   "page.display.title": "画面设置",
   "page.display.caption": "选择画面表现、帧率与语言。",
   "group.performance.title": "显示与性能",

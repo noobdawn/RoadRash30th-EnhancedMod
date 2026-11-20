@@ -50,6 +50,7 @@ internal static partial class RuntimePatch
         int[] values={unchecked((int)(image+0x2036E8)),unchecked((int)(image+RvaPlayer)),(int)(speed*1200),rhythm,sprint,chase,weave,Guid.NewGuid().GetHashCode(),unchecked((int)lanes.ToInt64()),lead};
         byte[] data=new byte[values.Length*4];Buffer.BlockCopy(values,0,data,0,data.Length);Write(process,config,data);
         log("AI 长跑变化已写入：节奏="+rhythm+"；冲刺="+sprint+"；追赶="+chase+"；骑行选线="+weave+"（0 关 / 1 低 / 2 中 / 3 高；原版车道偏好，独立换线，近距离交通反应）。");
+        if (weave > 0) log("已启用长跑人群起步避让。");
         return code;
     }
 }

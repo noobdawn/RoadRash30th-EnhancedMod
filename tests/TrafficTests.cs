@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
@@ -17,6 +18,7 @@ internal static class TrafficTests
     static ExceptionHandler handler=delegate(IntPtr p){if(unchecked((uint)Marshal.ReadInt32(Marshal.ReadIntPtr(p)))==0xC0000005){IntPtr c=Marshal.ReadIntPtr(p,4);Console.Error.WriteLine("Traffic native AV: RVA={0:X} EAX={1:X8} ECX={2:X8} EDX={3:X8} ESI={4:X8} EDI={5:X8}",(uint)Marshal.ReadInt32(c,184)-diagnosticImage,Marshal.ReadInt32(c,176),Marshal.ReadInt32(c,172),Marshal.ReadInt32(c,168),Marshal.ReadInt32(c,160),Marshal.ReadInt32(c,156));ExitProcess(77);}return 0;};
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate ulong Evaluate(IntPtr car,IntPtr config,int speed,int acceleration);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void RunCode();
+    [UnmanagedFunctionPointer(CallingConvention.ThisCall)] delegate void CarMethod(IntPtr car);
     static long Alloc(int n){return (uint)VirtualAlloc(IntPtr.Zero,(UIntPtr)n,0x3000,0x40).ToInt32();}
     static void Put(long p,long v){Marshal.WriteInt32(new IntPtr(p),unchecked((int)v));}
     static int Get(long p){return Marshal.ReadInt32(new IntPtr(p));}
@@ -67,6 +69,99 @@ internal static class TrafficTests
         bool rejected=false;try{RuntimePatch.ApplyTrafficDriving(Process.GetCurrentProcess().Handle,image,2,2,true,delegate(string s){});}catch(InvalidOperationException){rejected=true;}
         Check(rejected,"mismatched or already patched traffic signature is rejected");
     }
+    // Count calls in the mapped game while letting its actual road/actor search run.
+    static void CountCalls(long site, long wrapper, long counter)
+    {
+        if (Marshal.ReadByte(new IntPtr(site)) != 0xE9) throw new Exception("Expected traffic search thunk");
+        long target = site + 5 + Get(site+1);
+        var call = new List<byte> { 0x9C,0xFF,0x05 }; D(call,counter);
+        call.AddRange(new byte[] { 0x9D,0xE9 }); D(call,target-(wrapper+call.Count+4));
+        Write(wrapper,call.ToArray());
+        var jump = new List<byte> { 0xE9 }; D(jump,wrapper-(site+5)); Write(site,jump.ToArray());
+    }
+
+    static void SetTrafficScene(long car, long road, long actors, long ends, int direction, int[] kinds)
+    {
+        const int origin = 1024;
+        int forward = direction == 2 ? 4 : 0, backward = 4-forward;
+        int sign = direction == 2 ? -1 : 1, x = sign*125*256;
+        long head = ends, tail = ends+0x40;
+        Marshal.Copy(new byte[0x400],0,new IntPtr(car),0x400);
+        Put(car+0x18,1); Put(car+0x1c,origin); Put(car+0x28,x); Put(car+0x2c,road); Put(car+0x140,road);
+        Put(car+0xc4,16); Put(car+0xc0,7); Put(car+0x1cc,direction); Put(car+0x208,1);
+        Put(car+0xec,30000); Put(car+0x108,sign*30000); Put(car+0x1c4,256);
+        Put(car+0x174,45*256); Put(car+0x178,16); Put(car+0x17c,20);
+        Marshal.WriteByte(new IntPtr(car+0x1e8),direction == 2 ? (byte)255 : (byte)0);
+        Put(head+backward,0); Put(head+forward,car); Put(car+backward,head);
+        long prev = car;
+        for (int i=0; i<kinds.Length; i++) {
+            long node = actors+i*0x400;
+            Put(node+0x2c,road); Put(node+0xc4,kinds[i]); Put(node+0x28,x);
+            Put(node+0x1c,origin+sign*(i+1)*8); Put(node+0x174,16*256); Put(node+0x178,16);
+            Put(prev+forward,node); Put(node+backward,prev); prev=node;
+        }
+        Put(prev+forward,tail); Put(tail+backward,prev); Put(tail+forward,0);
+    }
+
+    static void NativeTrafficPlanning(string path, decimal same, decimal opposite, bool crazy)
+    {
+        long image=MapGame(path), road=Alloc(0x400), car=Alloc(0x400), ends=Alloc(0x100);
+        long actors=Alloc(128*0x400), probes=Alloc(0x1000);
+        diagnosticImage=image;
+        RuntimePatch.ApplyTrafficDriving(Process.GetCurrentProcess().Handle,image,same,opposite,crazy,delegate {});
+        CountCalls(image+0x5501,probes+0x100,probes);
+        CountCalls(image+0x57db,probes+0x200,probes+4);
+        // End-of-update sprite selection/animation requires the game's renderer.
+        Write(image+0x1dfc,new byte[]{0xc3}); Write(image+0x57f9,new byte[]{0xc3});
+        Put(image+0x203714,1024); Put(image+0x2036e8,120);
+        Marshal.WriteByte(new IntPtr(image+0x2036a0),100);
+        Put(road+0x28,Alloc(0x100)); Put(road+0x2c,256); Put(road+0x30,256);
+        Put(road+0xe0,-250); Put(road+0xe4,250); Marshal.WriteByte(new IntPtr(road+0x36),3);
+        var update=(CarMethod)Marshal.GetDelegateForFunctionPointer(new IntPtr(image+0x69b30),typeof(CarMethod));
+        var contact=(CarMethod)Marshal.GetDelegateForFunctionPointer(new IntPtr(image+0x6a600),typeof(CarMethod));
+        int[] empty=new int[0], types={8,4,32,16};
+        var crowd=Enumerable.Range(0,128).Select(i=>types[i%types.Length]).ToArray();
+        foreach (int direction in new[]{0,2}) {
+            string label=" direction="+direction+" multiplier="+(direction==0?same:opposite)+" crazy="+crazy;
+            int[] clear=null;
+            foreach (var scene in new[]{empty,new[]{8},new[]{4},new[]{32},new[]{16},crowd}) {
+                SetTrafficScene(car,road,actors,ends,direction,scene);
+                Put(probes,0); Put(probes+4,0); update(new IntPtr(car));
+                int[] motion={Get(car+0xec),Get(car+0x128),Get(car+0x1dc),Get(car+0x1e0)};
+                string where=label+" actors="+scene.Length+(scene.Length==1?" type="+scene[0]:"");
+                if (scene.Length==0) {
+                    clear=motion;
+                    Check(motion[0]==(int)(10000*(direction==0?same:opposite)),"clear-road cruise speed"+where);
+                }
+                if (crazy) {
+                    Check(Get(probes)==0 && Get(probes+4)==0 && motion.SequenceEqual(clear),
+                        "driver follows the same speed, heading and lane vector without either search"+where);
+                } else {
+                    Check(Get(probes)>0 && Get(probes+4)>0 &&
+                        (scene.Length==0 || (uint)Get(car+0x1f0)==actors),"original searches find in-lane traffic"+where);
+                    if (scene.Length==1 && scene[0]==8) Check(motion[0]<clear[0],"driver yields to runner"+where);
+                }
+                if (scene.Length==1 && scene[0]==8) {
+                    Console.WriteLine("Traffic runner comparison{0} clearSpeed={1} runnerSpeed={2} roadSearches={3} actorSearches={4}",
+                        label,clear[0],motion[0],Get(probes),Get(probes+4));
+                    Put(car+0x1a0,actors); contact(new IntPtr(car));
+                    Check(Marshal.ReadByte(new IntPtr(car+0x1f4))==1,"actual contact still reaches the traffic impact callback"+where);
+                }
+            }
+        }
+        if (crazy) {
+            foreach (int direction in new[]{1,3}) {
+                SetTrafficScene(car,road,actors,ends,direction,empty); Put(probes+4,0);
+                update(new IntPtr(car));
+                Check(Get(probes+4)>0 && Get(car+0x1dc)==(direction==1?0x32000:-0x32000) && Get(car+0x1e0)==0,
+                    "cross-street driver still searches and uses the original heading direction="+direction);
+            }
+            SetTrafficScene(car,road,actors,ends,0,empty); Put(car+0xc4,4); Put(probes+4,0);
+            update(new IntPtr(car));
+            Check(Get(probes+4)>0 && Get(car+0xec)==10000,"non-traffic actor cannot enter the crazy driver plan");
+        }
+    }
+
     static int Main(string[] args)
     {
         SetErrorMode(0x8003);AddVectoredExceptionHandler(1,handler);
@@ -116,7 +211,13 @@ internal static class TrafficTests
             Put(car+0x2c,0);Put(car+0x140,0);Put(car+0x1dc,987);run(new IntPtr(car),new IntPtr(config),10000,18);Check(Get(car+0x1dc)==987,"unloaded traffic skips road access");
             setup(decimal.MaxValue,1,false);Put(car+0x1cc,0);Put(car+0xec,int.MaxValue-100);ulong saturated=run(new IntPtr(car),new IntPtr(config),10000,18);
             Check((uint)saturated==int.MaxValue&&(saturated>>32)==0,"extreme multiplier cannot wrap native acceleration add");
-            if(args.Length>1)NativeHook(args[1]);
+            if(args.Length>1) {
+                NativeHook(args[1]);
+                NativeTrafficPlanning(args[1],1m,1m,false);
+                NativeTrafficPlanning(args[1],2m,0.5m,false);
+                NativeTrafficPlanning(args[1],1m,1m,true);
+                NativeTrafficPlanning(args[1],2m,0.5m,true);
+            }
             Console.WriteLine("Traffic tests: "+passed+" passed");return 0;
         }catch(Exception ex){Console.Error.WriteLine(ex);return 1;}
     }

@@ -30,7 +30,8 @@ static __attribute__((always_inline)) inline int pulse(int t,int start,int lengt
     if(t>length-30)return smooth((length-t)*1024/30);
     return 1024;
 }
-typedef struct { int x,z,width,length,forward,traffic; } Obstacle;
+typedef enum { SolidObstacle, RunningPeer, RoadTraffic } ObstacleType;
+typedef struct { int x,z,width,length,forward; ObstacleType type; } Obstacle;
 static __attribute__((always_inline)) inline int steer(byte *bike,byte *rider,Config *c,u32 seed,u32 tick,int travel,int *slow) {
     byte *road=P(rider,0x2c);
     int lo,hi,x=I(rider,0x28),width,margin,desired,goal,dt=1;
@@ -105,13 +106,21 @@ static __attribute__((always_inline)) inline int steer(byte *bike,byte *rider,Co
                    (kind==1||kind==2||kind==4||kind==8||kind==16||kind==32)) {
                     /* Hidden chase bikes must never become a moving obstacle wall. */
                     int ignore=kind==4&&I(node,0x2f4)!=0;
-                    if(kind==8) {byte *owner=P(node,0x1c4);if(owner&&I(owner,0x2f4)==0)ignore=1;}
+                    ObstacleType type=kind==16?RoadTraffic:SolidObstacle;
+                    if(kind==8) {
+                        byte *owner=P(node,0x1c4);
+                        if(owner) {
+                            int state=I(owner,0x2f4);
+                            if(state==0)ignore=1;
+                            if(state==2&&!(node[0xc0]&16)&&I(owner,0xc4)==4)type=RunningPeer;
+                        }
+                    }
                     if(!ignore&&z>=-clamp(I(node,0x178),4,256)-24&&z<=horizon+256) {
                         nearby[count].x=I(node,0x28);nearby[count].z=z;
                         nearby[count].width=clamp(I(node,0x174),12*256,1000*256)+selfWidth+8*256;
                         nearby[count].length=clamp(I(node,0x178),4,256)+clamp(I(rider,0x178),4,128);
                         nearby[count].forward=I(node,0x108);
-                        nearby[count].traffic=kind==16;
+                        nearby[count].type=type;
                         count++;
                     }
                 }
@@ -126,13 +135,13 @@ static __attribute__((always_inline)) inline int steer(byte *bike,byte *rider,Co
                 Obstacle *o=&nearby[n];
                 /* Traffic gets a short, imperfect reaction window. Do not turn
                    the whole road into a car-free corridor far in advance. */
-                if(o->traffic&&o->z>clamp(travel/256*6,48,192)+o->length)continue;
+                if(o->type==RoadTraffic&&o->z>clamp(travel/256*6,48,192)+o->length)continue;
                 int proximity=clamp(horizon-o->z+o->length,0,horizon);
                 int overlap=clamp(o->width-absolute(trial-o->x),0,o->width)/256;
                 /* Prefer full passing clearance from the first plan. A cheap partial
                    gap can otherwise win early, then force a late side reversal. */
                 int penalty=proximity>0?overlap*(64+proximity*32/horizon):0;
-                if(o->traffic)penalty/=24;
+                if(o->type==RoadTraffic)penalty/=24;
                 if(o->forward>=travel&&o->z>o->length+16)penalty/=8;
                 risk+=penalty;
             }
@@ -144,7 +153,9 @@ static __attribute__((always_inline)) inline int steer(byte *bike,byte *rider,Co
         *slow=1000;
         for(int n=0;n<count;n++) {
             Obstacle *o=&nearby[n];int clearance=o->width-absolute(x-o->x);
-            if(o->traffic)continue; /* No guaranteed safe braking for road traffic. */
+            if(o->type==RoadTraffic)continue; /* No guaranteed safe braking for road traffic. */
+            // Side-by-side runners can steer apart. Braking for each other locks a packed row.
+            if(o->type==RunningPeer&&o->z<=0)continue;
             if(clearance>0&&o->z> -o->length) {
                 /* Allow time to reach the free lane: selecting a safe destination
                    alone does not mean the runner has already cleared the obstacle. */
@@ -157,6 +168,10 @@ static __attribute__((always_inline)) inline int steer(byte *bike,byte *rider,Co
                 allowed=clamp(o->forward,-2000000,base);
                 if(allowed>=0&&base-allowed<=safeStep*256)continue;
                 allowed+=safeStep*256;
+                // Native motion discards fractional forward distance every tick.
+                // Two road units before steering leave a whole unit after turning.
+                // The ratio cap below still respects a slower configured pace.
+                if(o->type==RunningPeer&&allowed<2*256)allowed=2*256;
                 while(base>2000000){base/=2;allowed/=2;}
                 pace=clamp(allowed*1000/base,150,1000);
                 if(pace<*slow)*slow=pace;
