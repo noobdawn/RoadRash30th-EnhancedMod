@@ -44,7 +44,7 @@ namespace RoadRash.Workbench
                 app.DispatcherUnhandledException += (s, e) =>
                 {
                     File.WriteAllText(Path.Combine(Path.GetTempPath(), "RoadRashLauncher-error.log"), e.Exception.ToString());
-                    MessageBox.Show("启动器遇到错误：\n" + e.Exception.Message, "RoadRash 启动器", MessageBoxButton.OK, MessageBoxImage.Error); e.Handled = true;
+                    MessageBox.Show("修改器遇到错误：\n" + e.Exception.Message, "RoadRash 修改器", MessageBoxButton.OK, MessageBoxImage.Error); e.Handled = true;
                 };
                 return app.Run(new MainWindow(new WorkbenchViewModel(directory)));
             }
@@ -52,7 +52,7 @@ namespace RoadRash.Workbench
             {
                 string report = Path.Combine(Path.GetTempPath(), "RoadRashLauncher-error.log");
                 File.WriteAllText(report, ex.ToString());
-                if (args.Length == 0) MessageBox.Show("启动失败：" + ex.Message + "\n日志：" + report, "RoadRash 启动器");
+                if (args.Length == 0) MessageBox.Show("启动失败：" + ex.Message + "\n日志：" + report, "RoadRash 修改器");
                 return 1;
             }
         }

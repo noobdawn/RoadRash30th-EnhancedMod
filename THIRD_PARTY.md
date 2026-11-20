@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Road Rash 游戏程序、场景、车辆 sprite、音乐、字体和商标 | 用户自行安装的游戏 | 不包含游戏 EXE、DLL、资源包、音乐或存档 |
 | `docs/images/gameplay.png` | 项目维护者提供的实机截图 | 用于演示功能；其中游戏画面的权利归原权利人，不属于 MIT 授权范围 |
-| `RoadRash30thEnhancement-v1.1.0.exe` | 当前启动器调用的外部增强器 | 玩家版沿用上一版玩家包中的原文件，保留第三方许可。源码包与独立启动器包排除此文件。摘要见 `dependencies/` |
+| `RoadRash30thEnhancement-v1.1.0.exe` | 修改器调用的外部增强器 | 玩家版沿用已核验的 v1.1.0 原文件并保留第三方许可。源码包与独立修改器包仅附文件摘要，见 `dependencies/` |
 | 经典 Dota 2 英文播报 | Valve，玩家本机安装的 Dota 2 | 玩家包提供本地导入脚本。语音录音和生成的 `KnockdownVoice.bank` 仅保存在玩家本机 |
 | `RoadRash_HD_Setup.exe` / 高清渲染组件 | [OBLPlife / RoadRash30th-HD](https://github.com/OBLPlife/RoadRash30th-HD) | 不包含二进制；上游采用 PolyForm Noncommercial License 1.0.0 |
 | `RoadRash_ZH_CN_Setup.exe` / 汉化组件 | [OBLPlife / RoadRash30th-Chinese](https://github.com/OBLPlife/RoadRash30th-Chinese) | 不包含二进制；上游采用 PolyForm Noncommercial License 1.0.0 |

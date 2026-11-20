@@ -382,7 +382,9 @@ if __name__=="__main__":
     parser.add_argument("--baseline-launcher", type=Path, help="Saved launcher to use for the legacy meter comparison")
     args=parser.parse_args()
     old_dir,new_dir=args.output/"installed",args.output/"candidate"
-    installed = args.game / "暴力摩托增强启动器.exe"
+    installed = args.game / "暴力摩托增强修改器.exe"
+    if not installed.is_file():
+        installed = args.game / "暴力摩托增强启动器.exe"
     if not installed.is_file():
         installed = args.game / "RoadRash30thLauncher.exe"
     old=unpack(args.baseline_launcher or installed,old_dir)

@@ -56,7 +56,7 @@ namespace RoadRash.Workbench
         internal static async Task<XElement> Bridge(string operation, string gameDir, XElement options, Action<string> log)
         {
             string exe = Path.Combine(AppContext.BaseDirectory, "Tools", "RoadRash.PatchBridge.exe");
-            if (!File.Exists(exe)) throw new FileNotFoundException("缺少补丁兼容程序，请完整解压启动器包。", exe);
+            if (!File.Exists(exe)) throw new FileNotFoundException("缺少补丁兼容程序，请完整解压修改器包。", exe);
             if (!File.Exists(Path.Combine(gameDir, "RoadRash95.exe"))) throw new FileNotFoundException("所选目录中没有 RoadRash95.exe，请重新选择游戏目录。");
             string temp = Path.Combine(Path.GetTempPath(), "RoadRashLauncher", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(temp);
@@ -111,12 +111,14 @@ namespace RoadRash.Workbench
                     s.B("sameTraffic"), s.B("oppositeTraffic"), s.B("nearbyImpactAudio"), s.B("forceTrackLength"), TrackLengthUnits.ToBlocks(s.D("trackLengthKm")),
                     OpponentIdentity(s), s.B("opponentsTargetPlayer"), s.B("knockdownHud"), s.B("knockdownVoice"),
                     (int)(1000 * s.D("knockdownCreditSeconds")), (int)(1000 * s.D("streakSeconds")), s.I("knockdownsPerVoice"),
-                    s.B("hardcore"), s.B("policePlayer")));
+                    s.B("hardcore"), s.B("policePlayer"), s.I("rankMode")));
                 if (patchFailed) throw new InvalidOperationException("部分运行时补丁未能完成，请查看具体日志。");
                 Report("运行时补丁已写入。");
                 if (overlay) SpawnHelper(gameDir, "--overlay", process.Id.ToString(CultureInfo.InvariantCulture), overlayPath);
-                if (s.B("independentAudio")) SpawnHelper(gameDir, "--watch", process.Id.ToString(CultureInfo.InvariantCulture), "--audio-diagnostics");
-                else SpawnHelper(gameDir, "--watch", process.Id.ToString(CultureInfo.InvariantCulture));
+                var watch = new List<string> { "--watch", process.Id.ToString(CultureInfo.InvariantCulture) };
+                if (s.B("independentAudio")) watch.Add("--audio-diagnostics");
+                if (s.I("rankMode") != 0) watch.Add("--rank-stats");
+                SpawnHelper(gameDir, watch.ToArray());
             }
             catch (Exception ex) { Report("游戏已启动，但补丁未全部完成：" + ex.Message); throw new InvalidOperationException("游戏已启动，但补丁未全部完成。请退出游戏后查看日志再重试。\n" + ex.Message, ex); }
             finally

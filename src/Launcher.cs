@@ -134,7 +134,8 @@ internal static class Launcher
             }
             if (mode == "--watch" && args.Length >= 2)
             {
-                Watch(int.Parse(args[1], CultureInfo.InvariantCulture), args.Length > 2 && args[2] == "--audio-diagnostics");
+                Watch(int.Parse(args[1], CultureInfo.InvariantCulture), Array.IndexOf(args, "--audio-diagnostics") >= 0,
+                    Array.IndexOf(args, "--rank-stats") >= 0);
                 return;
             }
             if (mode == "--diag" && args.Length >= 2)
@@ -293,7 +294,7 @@ internal static class Launcher
         return s;
     }
 
-    private static void Watch(int pid, bool audioDiagnostics = false)
+    private static void Watch(int pid, bool audioDiagnostics = false, bool rankStats = false)
     {
         string path = Path.Combine(GameDir, "runtime_stats.log");
         StringBuilder log = new StringBuilder();
@@ -302,6 +303,7 @@ internal static class Launcher
         string lastCarLine = null;
         int audioAttempts = 0;
         bool audioPending = audioDiagnostics;
+        var rankTrace = rankStats ? new RuntimePatch.RankTraceFile() : null;
         try
         {
             while (true)
@@ -310,6 +312,12 @@ internal static class Launcher
                 try { p = Process.GetProcessById(pid); }
                 catch { break; }
                 if (p.HasExited) break;
+                if (rankTrace != null) {
+                    try { rankTrace.Poll(p, GameDir); }
+                    catch (Win32Exception) { }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
                 if (audioPending && audioAttempts++ < 60)
                 {
                     try
@@ -644,7 +652,7 @@ internal sealed partial class LauncherForm : Form
 
     public LauncherForm()
     {
-        Text = "暴力摩托 30 周年纪念版 · 增强启动器";
+        Text = "暴力摩托 30 周年纪念版 · 增强修改器";
         Font = new System.Drawing.Font("Microsoft YaHei UI", 9.5f);
         AutoScaleDimensions = new SizeF(96f, 96f);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -2573,7 +2581,7 @@ internal static partial class RuntimePatch
         decimal sameTrafficSpeed=1m,decimal oppositeTrafficSpeed=1m,bool crazyDrivers=false,bool fallAnimationFix=false,
         bool sameTraffic=true,bool oppositeTraffic=true,bool nearbyImpactAudio=false,bool forceTrackLength=false,int trackLength=1800,
         int opponentIdentity=0,bool opponentsTargetPlayer=false,bool knockdownHud=false,bool knockdownVoice=true,
-        int creditMs=2000,int streakMs=18000,int knockdownsPerVoice=1,bool hardcore=false,bool policePlayer=false)
+        int creditMs=2000,int streakMs=18000,int knockdownsPerVoice=1,bool hardcore=false,bool policePlayer=false,int rankMode=0)
     {
         IntPtr baseAddress = IntPtr.Zero;
         for (int i = 0; i < 100; i++)
@@ -2592,6 +2600,7 @@ internal static partial class RuntimePatch
         try
         {
             ApplyRiderRoadGuard(h, base64, log);
+            ApplyRankBatch(h, base64, rankMode, log);
             long codeBase = 0;
             long stateBase = 0;
             long spriteBase = 0;

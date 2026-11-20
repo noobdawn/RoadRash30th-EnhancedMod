@@ -10,7 +10,7 @@ internal sealed partial class LauncherForm
     private TabPage BuildFixesTab()
     {
         TabPage page = Tab("Fix 修复"); TableLayoutPanel body = PageLayout(3);
-        body.Controls.Add(Paragraph("集中管理原版游戏问题的修复。各项可独立开关，适用于所有玩法；切换比赛预设会保留这里的选择。设置在下一次从启动器启动游戏时生效。", Muted), 0, 0);
+        body.Controls.Add(Paragraph("各项修复适用于所有玩法，可独立开关。切换比赛预设会保留这里的选择。下次从修改器启动游戏时生效。", Muted), 0, 0);
 
         GroupBox animation = Group("人物动画"); TableLayoutPanel animationBody = PageLayout(2);
         fallAnimationFix.Text = "修复翻滚中闪出奔跑动作";

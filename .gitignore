@@ -8,6 +8,8 @@
 *.zip
 *.zip.sha256.txt
 *.log
+/rank-start-*.csv
+/rank-start-*.csv.tmp
 *.bin
 __pycache__/
 *.pyc

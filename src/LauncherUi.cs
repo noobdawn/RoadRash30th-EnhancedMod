@@ -46,7 +46,7 @@ internal sealed partial class LauncherForm
         Controls.Add(shellLayout);
 
         Panel header = new Panel { Dock = DockStyle.Fill, BackColor = Ink, Padding = new Padding(18, 10, 18, 10), Margin = new Padding(0, 0, 0, 12) };
-        Label title = new Label { Text = "暴力摩托  /  增强启动器", AutoSize = true, ForeColor = Color.White, Font = new Font(Font.FontFamily, 19, FontStyle.Bold), Location = new Point(18, 10) };
+        Label title = new Label { Text = "暴力摩托  /  增强修改器", AutoSize = true, ForeColor = Color.White, Font = new Font(Font.FontFamily, 19, FontStyle.Bold), Location = new Point(18, 10) };
         Label subtitle = new Label { Text = "ROAD RASH     30TH ANNIVERSARY     ·     选择玩法，即刻出发", AutoSize = true, ForeColor = Color.FromArgb(183, 204, 216), Location = new Point(21, 48) };
         header.Controls.Add(title); header.Controls.Add(subtitle);
         shellLayout.Controls.Add(header, 0, 0);

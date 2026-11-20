@@ -23,11 +23,14 @@ $testDirectory = Join-Path $root ('artifacts\tests\' + [Guid]::NewGuid().ToStrin
 $source = @('Launcher.cs', 'LauncherUi.cs', 'LauncherFixes.cs', 'LauncherAudio.cs', 'GameAudioSession.cs', 'LauncherMotion.cs', 'LauncherCharacter.cs', 'LauncherRace.cs', 'LauncherAi.cs', 'LauncherAiNative.cs', 'LauncherTraffic.cs', 'LauncherTrafficNative.cs', 'LauncherNearbyAudio.cs', 'LauncherImpactAudioNative.cs', 'LauncherTrackLength.cs') | ForEach-Object { Join-Path $root "src\$_" }
 $source += @('LauncherOpponents.cs', 'LauncherOpponentNative.cs') | ForEach-Object { Join-Path $root "src\$_" }
 $source += @('LauncherKnockdown.cs', 'LauncherKnockdownNative.cs') | ForEach-Object { Join-Path $root "src\$_" }
+$source += @('LauncherRank.cs', 'LauncherRankNative.cs') | ForEach-Object { Join-Path $root "src\$_" }
 function Invoke-TestSuite([string]$Name, [string]$Platform, [string[]]$TestArguments = @()) {
     $output = Join-Path $testDirectory "$Name.exe"
+    $suite = @((Join-Path $root "tests\$Name.cs"))
+    if ($Name -eq 'RaceTests') { $suite += Join-Path $root 'tests\RankTests.cs' }
     & $compiler /nologo /target:exe "/platform:$Platform" /optimize+ /codepage:65001 `
         "/main:$Name" /r:System.Windows.Forms.dll /r:System.Drawing.dll `
-        /r:System.Core.dll /r:System.Web.Extensions.dll "/resource:$root\assets\knockdown-hud.png,KnockdownHud.png" "/out:$output" $source (Join-Path $root "tests\$Name.cs")
+        /r:System.Core.dll /r:System.Web.Extensions.dll "/resource:$root\assets\knockdown-hud.png,KnockdownHud.png" "/out:$output" $source $suite
     if ($LASTEXITCODE -ne 0) { throw "$Name compilation failed: $LASTEXITCODE" }
     & $output @TestArguments
     if ($LASTEXITCODE -ne 0) { throw "$Name failed: $LASTEXITCODE" }
@@ -38,7 +41,9 @@ Invoke-TestSuite -Name MotionTests -Platform x86
 $characterArgs = @()
 if ($gameExe) { $characterArgs = @($gameExe) }
 Invoke-TestSuite -Name CharacterTests -Platform x86 -TestArguments $characterArgs
-Invoke-TestSuite -Name RaceTests -Platform x86 -TestArguments $characterArgs
+$raceArgs = @()
+if ($gameExe) { $raceArgs = @($gameExe, (Join-Path $root 'src\RankBatch.c')) }
+Invoke-TestSuite -Name RaceTests -Platform x86 -TestArguments $raceArgs
 Invoke-TestSuite -Name RunAiTests -Platform x86 -TestArguments @((Join-Path $root 'src\LongRunAi.c'))
 Invoke-TestSuite -Name RunLaneTests -Platform x86
 Invoke-TestSuite -Name TrafficTests -Platform x86 -TestArguments (@((Join-Path $root 'src\TrafficDrive.c'))+$characterArgs)

@@ -23,6 +23,7 @@ namespace RoadRash.Workbench
             {
                 var vm = new WorkbenchViewModel(output, false); var s = vm.Settings;
                 Check(s.Valid, "factory configuration is valid");
+                CheckRankSettings(output);
                 CheckOpponentSettings(output);
                 CheckRaceRules(output);
                 Check(s.Fields.Count() == SettingsStore.Defaults().Count - 2, "every factory key has one editable field");
@@ -96,6 +97,22 @@ namespace RoadRash.Workbench
                 lines.Add("TOTAL " + count + " PASS"); File.WriteAllLines(Path.Combine(output, "results.txt"), lines); return 0;
             }
             catch (Exception ex) { lines.Add("FAIL " + ex); File.WriteAllLines(Path.Combine(output, "results.txt"), lines); return 1; }
+        }
+        private static void CheckRankSettings(string output)
+        {
+            var settings = new SettingsStore(null);
+            string path = Path.Combine(output, "rank-options.ini");
+            File.WriteAllText(path, "racers=10000\n");
+            settings.Load(path, output);
+            Check(settings.I("rankMode") == 0, "legacy 10000-rider profiles keep stock ranking");
+            for (int mode = 1; mode <= 3; ++mode) {
+                settings.Put("rankMode", mode);
+                settings.ApplyMode("normal");
+                settings.Save(path);
+                var restored = new SettingsStore(null);
+                restored.Load(path, output);
+                Check(restored.Valid && restored.I("rankMode") == mode, "ranking selection survives preset, save and reload " + mode);
+            }
         }
         private static void CheckRaceRules(string output)
         {

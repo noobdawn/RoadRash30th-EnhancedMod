@@ -37,6 +37,7 @@ namespace RoadRash.Workbench
             store.Add(null, new Setting("hardcore", Title("hardcore"), Description("hardcore"), "bool", dependency: "!policePlayer"));
             G("grid");
             N("racers", 4, 10000, true);
+            C("rankMode", 4);
             G("course");
             B("forceMap");
             C("mapLevel", 5, "forceMap");

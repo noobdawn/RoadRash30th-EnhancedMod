@@ -7,11 +7,12 @@ import re
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-LAUNCHER = '暴力摩托增强启动器.exe'
+LAUNCHER = '暴力摩托增强修改器.exe'
 SOURCE_FILES = (
+    'src/RankBatch.c', 'src/LauncherRank.cs', 'src/LauncherRankNative.cs', 'tests/RankTests.cs', 'docs/development/rank-batching.md',
     'src/LauncherKnockdown.cs', 'src/LauncherKnockdownNative.cs', 'src/Knockdown.c',
     'assets/knockdown-hud.png', 'scripts/import-knockdown-voice.py', 'tests/KnockdownTests.cs',
-    'tests/knockdown_sprite_replay.py', 'tests/knockdown_atlas_audit.py', 'docs/knockdown-sprites.md',
+    'tests/knockdown_sprite_replay.py', 'tests/knockdown_atlas_audit.py', 'docs/development/knockdown-sprites.md',
     'README.md', 'LICENSE', 'THIRD_PARTY.md', 'CHANGELOG.md', 'CONTRIBUTING.md',
     'VERSION', '.gitignore', '.gitattributes',
     'src/Launcher.cs', 'src/LauncherUi.cs', 'src/LauncherFixes.cs', 'src/LauncherAudio.cs', 'src/PatchBridge.cs',
@@ -30,9 +31,9 @@ SOURCE_FILES = (
     'config/launcher_settings.example.ini', 'assets/player_car.png', 'assets/workbench.ico',
     'dependencies/README.md', 'dependencies/verified-files.json',
     'third_party/licenses/Chinese-LICENSE.txt', 'third_party/licenses/HD-LICENSE.txt',
-    'docs/wpf-workbench.md', 'docs/launcher-readme.txt', 'docs/stage-2026-11-17.md',
-    'docs/character-features.md', 'docs/long-run.md', 'docs/images/gameplay.png',
-    'docs/compatibility-2026-11-17.md',
+    'docs/development/wpf-workbench.md', 'docs/players/guide.txt', 'docs/history/stage-2026-11-17.md',
+    'docs/development/character-features.md', 'docs/development/long-run.md', 'docs/images/gameplay.png',
+    'docs/history/compatibility-2026-11-17.md',
 )
 
 
@@ -98,7 +99,7 @@ def main():
                        'Tools/import-knockdown-voice.py': source['scripts/import-knockdown-voice.py'],
                        'Tools/Locales/zh-CN.json': source['config/locales/zh-CN.json']})
         # Installation instructions are self-contained at the top of the runtime archive.
-        player['Tools/LAUNCHER_README.txt'] = source['docs/launcher-readme.txt']
+        player['Tools/LAUNCHER_README.txt'] = source['docs/players/guide.txt']
         for name in ('Tools/RoadRash.PatchBridge.exe',
                      'Tools/licenses/CommunityToolkit-MVVM-LICENSE.txt',
                      'Tools/licenses/CommunityToolkit-THIRD-PARTY-NOTICES.txt',
@@ -116,12 +117,12 @@ def main():
                       or n in (LAUNCHER, 'LICENSE', 'VERSION',
                                'THIRD_PARTY.md', 'CHANGELOG.md', 'dependencies/verified-files.json')}
             player['Tools/' + name] = enhancer
-            player['安装说明.txt'] = source['docs/launcher-readme.txt']
-    make_zip(args.output_dir / ('RoadRashEnhancedLauncher-' + version + '-source.zip'), source, version, 'source')
+            player['安装说明.txt'] = source['docs/players/guide.txt']
+    make_zip(args.output_dir / ('RoadRash30th-EnhancedMod-' + version + '-source.zip'), source, version, 'source')
     if args.player_enhancer:
-        make_zip(args.output_dir / ('暴力摩托增强启动器-' + version + '-玩家版.zip'), player, version, 'player')
+        make_zip(args.output_dir / ('暴力摩托增强修改器-' + version + '-玩家版.zip'), player, version, 'player')
     elif player is not None:
-        make_zip(args.output_dir / ('RoadRashEnhancedLauncher-' + version + '-launcher.zip'), player, version, 'launcher-only')
+        make_zip(args.output_dir / ('RoadRash30th-EnhancedMod-' + version + '-launcher.zip'), player, version, 'launcher-only')
 
 
 if __name__ == '__main__':

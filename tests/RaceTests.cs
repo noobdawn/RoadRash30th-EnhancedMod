@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 
-internal static class RaceTests
+internal static partial class RaceTests
 {
     [DllImport("kernel32.dll")] static extern IntPtr VirtualAlloc(IntPtr at, UIntPtr size, uint type, uint protection);
     [DllImport("kernel32.dll")] static extern bool FlushInstructionCache(IntPtr process, IntPtr at, UIntPtr size);
@@ -507,7 +507,10 @@ internal static class RaceTests
             RuntimePatch.ApplyFixes(Process.GetCurrentProcess().Handle,image,true,false,failureLogs.Add);
             Check(failureLogs.Count==1&&failureLogs[0].Contains("失败")&&Marshal.ReadByte(new IntPtr(image+0x45AD5))==0,
                 "incompatible audio signature reports failure to launcher and leaves memory untouched");
-            if(args.Length>0)CheckGame(args[0]);
+            if(args.Length>0) {
+                CheckGame(args[0]);
+                CheckRankModes(args[0], args.Length > 1 ? args[1] : null);
+            }
             Console.WriteLine("Race tests: "+passed+" passed");return 0;
         }catch(Exception ex) { Console.Error.WriteLine(ex);return 1; }
     }

@@ -24,9 +24,9 @@
 
 开发需要 Windows、.NET 10 SDK、Windows 自带 Framework 编译器；首次构建需要 NuGet。`build.ps1` 优先使用项目 `artifacts/tools/dotnet` 中的便携 SDK，也接受 `-DotNet` 指定路径。`-BuildOnly` 编译调试产物，默认发布自包含版本。
 
-分发面向 Windows 10/11 x64。`暴力摩托增强启动器.exe` 自带 .NET/WPF 运行库，`Tools/RoadRash.PatchBridge.exe` 使用系统 Framework 4.x。将启动器和整个 `Tools` 文件夹安装到现有游戏目录。玩家版随附已验证的 v1.1.0 增强器。
+分发面向 Windows 10/11 x64。`暴力摩托增强修改器.exe` 自带 .NET/WPF 运行库，`Tools/RoadRash.PatchBridge.exe` 使用系统 Framework 4.x。将修改器和整个 `Tools` 文件夹安装到现有游戏目录。玩家版随附已验证的 v1.1.0 增强器。
 
-`package.py` 使用明确白名单，输出源码包、启动器包、清单与 SHA-256。不包含游戏、个人 INI、补丁状态文件、开发 SDK、NuGet 缓存或隔离测试副本。升级保留已有 INI；通用配置以示例文件名提供，防止解压时覆盖玩家配置。
+`package.py` 按文件清单生成源码包和修改器分发包，并为每个包写入 SHA-256。通用配置使用示例文件名，升级时保留玩家已有的 INI。
 
 ## 验证范围
 

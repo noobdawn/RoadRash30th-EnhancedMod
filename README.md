@@ -1,12 +1,12 @@
-﻿# 暴力摩托增强启动器 0.5.0
+﻿# RoadRash30th-EnhancedMod · 暴力摩托增强修改器
 
-用于 Windows 10/11 x64 上的 Steam《Road Rash：30 周年纪念版》，已验证游戏 build **26105967**。本版加入击倒仪表、连击火焰、硬核模式和「我是警察」预设。
+用于 Windows 10/11 x64 上的 Steam《Road Rash：30 周年纪念版》，目标游戏 build **26105967**。可调整比赛人数、AI、车流与战斗规则，也支持长跑、击倒仪表和硬核比赛。
 
 ## 安装与使用
 
-1. 解压玩家版 ZIP，将 `暴力摩托增强启动器.exe` 和整个 `Tools` 文件夹放在 `RoadRash95.exe` 旁。升级时保留自己的 `launcher_settings.ini` 和语音库。
-2. 打开中文启动器，选好玩法，点击 **应用并启动**。玩家包自带 .NET 桌面运行库和增强器 v1.1.0。
-3. 在「画面设置 → 击倒仪表」调整归因时间、连击时间和播报间隔。在「比赛设置」开启硬核模式或选择「我是警察」。可选语音的安装命令见[玩家指南](docs/launcher-readme.txt)。
+1. 解压玩家版 ZIP，将 `暴力摩托增强修改器.exe` 和整个 `Tools` 文件夹放在 `RoadRash95.exe` 旁。升级时保留自己的 `launcher_settings.ini` 和语音库。旧版 0.5.0 的入口名为 `暴力摩托增强启动器.exe`。
+2. 打开修改器，选好玩法，点击 **应用并启动**。玩家包自带 .NET 桌面运行库和增强器 v1.1.0。
+3. 在「画面设置 → 击倒仪表」调整归因时间、连击时间和播报间隔。在「比赛设置」开启硬核模式或选择「我是警察」。可选语音的安装命令见[玩家指南](docs/players/guide.txt)。
 
 | 功能 | 本版行为 |
 | --- | --- |
@@ -29,9 +29,9 @@ $gameDir = 'D:\Games\RoadRash'
 .\scripts\test-wpf.ps1 -RenderUi -GameDirectory $gameDir
 ```
 
-构建产物位于 `artifacts/bin/`。WPF 测试使用离屏界面；带游戏目录的桥接测试从已有增强器备份基线创建隔离副本，验证读取、应用与还原。界面、补丁与兼容进程的职责见[工作台架构](docs/wpf-workbench.md)。
+构建产物位于 `artifacts/bin/`。WPF 测试使用离屏界面；带游戏目录的桥接测试从已有增强器备份基线创建隔离副本，验证读取、应用与还原。界面、补丁与兼容进程的职责见[工作台架构](docs/development/wpf-workbench.md)。
 
-**0.5.0 收尾验证（2026-11-20）**：单中文入口的解压包通过 147 项界面检查，隔离副本应用补丁后可还原到原始哈希。比赛规则专项通过 86 项检查，涵盖两条触地路径、暂停和重开；模拟声卡分别连续触发 50 次 Holy Shit 与 Rampage，停止击倒后均无积压补播。上述结果来自离线测试。完整赛程和实际扬声器听感仍需实机确认。
+当前预览版 **0.5.1-preview.1** 提供万人起跑统计和实验性 AI 名次合并。开发验证采用离线车阵，完整比赛的帧时间可由玩家按同一赛道进行对照。[实测步骤](docs/development/rank-batching.md)
 
 ## 生成分发包
 
@@ -41,16 +41,17 @@ $gameDir = 'D:\Games\RoadRash'
 py -3 .\scripts\package.py --player-enhancer "$gameDir\Tools\RoadRash30thEnhancement-v1.1.0.exe"
 ```
 
-脚本核对增强器摘要后将输出写入 `artifacts/release/`。省略 `--player-enhancer` 可生成需另备增强器的独立启动器包；`--source-only` 仅打包源码。本机已验收的分发件存放在游戏目录的 `Release/`。玩家包随附语音导入脚本，玩家自己的音库、存档和配置保存在本机。
+脚本核对增强器摘要后将输出写入 `artifacts/release/`。省略 `--player-enhancer` 可生成需另备增强器的独立修改器包。使用 `--source-only` 可只打包源码。玩家包随附语音导入脚本，玩家自己的音库、存档和配置保存在本机。
 
-## 专题文档
+## 文档导航
 
 | 查找内容 | 文档 |
 | --- | --- |
-| 安装、玩法、语音、设置还原及日志 | [玩家指南](docs/launcher-readme.txt) |
-| 连击火焰、游戏调色板、DirectDraw 合成与离屏复核 | [击倒仪表绘制](docs/knockdown-sprites.md) |
-| 长跑范围、选线、恢复上车、车辆耐久和下车保护 | [长跑与比赛设置](docs/long-run.md) · [车手功能](docs/character-features.md) |
-| 历次功能、修复与兼容性记录 | [变更记录](CHANGELOG.md) · [2026-11-17 兼容性记录](docs/compatibility-2026-11-17.md) |
+| 安装、玩法、语音、设置还原及日志 | [玩家指南](docs/players/guide.txt) |
+| 万人比赛的起跑名次、离线验证和玩家对照步骤 | [名次刷新实验](docs/development/rank-batching.md) |
+| 连击火焰、游戏调色板、DirectDraw 合成与离屏复核 | [击倒仪表绘制](docs/development/knockdown-sprites.md) |
+| 长跑范围、选线、恢复上车、车辆耐久和下车保护 | [长跑与比赛设置](docs/development/long-run.md) · [车手功能](docs/development/character-features.md) |
+| 历次功能、修复与兼容性记录 | [变更记录](CHANGELOG.md) · [2026-11-17 兼容性记录](docs/history/compatibility-2026-11-17.md) |
 | 第三方工具、原始文件校验与许可 | [依赖清单](dependencies/README.md) · [第三方说明](THIRD_PARTY.md) |
 | 源码许可与参与开发 | [MIT 许可证](LICENSE) · [贡献指南](CONTRIBUTING.md) |
 

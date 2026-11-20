@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $out = Join-Path $root ('artifacts\wpf-tests\' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($out) | Out-Null
-$launcher = Join-Path ([IO.Path]::GetFullPath($BinaryDirectory)) '暴力摩托增强启动器.exe'
+$launcher = Join-Path ([IO.Path]::GetFullPath($BinaryDirectory)) '暴力摩托增强修改器.exe'
 $mode = if ($RenderUi) { '--render-ui' } else { '--self-test' }
 $p = Start-Process -FilePath $launcher -ArgumentList @($mode, ('"' + $out + '"')) -WindowStyle Hidden -Wait -PassThru
 if ($p.ExitCode -ne 0) { Get-Content (Join-Path $out 'results.txt') -Tail 10; throw 'WPF verification failed.' }
