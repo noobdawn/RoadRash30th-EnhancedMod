@@ -10,6 +10,7 @@
 
 | 功能 | 本版行为 |
 | --- | --- |
+| 大型比赛 | 「Fix 修复 → 减少大型比赛卡顿」默认开启，减少大批电脑车手同时更新名次时的停顿。 |
 | 击倒与连击 | 五位液晶表统计本场击倒。默认在最后一次命中或接触后 2 秒内归因，18 秒内连续击倒显示火焰标语。 |
 | 英文播报 | 默认每次有效击倒触发。Holy Shit 与 Rampage 只在通道空闲时播放。 |
 | 硬核模式 | 玩家首次摔车触地 3 秒后以撞毁出局，暂停期间停表。 |
@@ -31,7 +32,7 @@ $gameDir = 'D:\Games\RoadRash'
 
 构建产物位于 `artifacts/bin/`。WPF 测试使用离屏界面；带游戏目录的桥接测试从已有增强器备份基线创建隔离副本，验证读取、应用与还原。界面、补丁与兼容进程的职责见[工作台架构](docs/development/wpf-workbench.md)。
 
-当前预览版 **0.5.1-preview.2** 的万人起跑优化位于「Fix 修复 → AI 名次刷新」。在「比赛设置」把参赛人数设为 10000，再在同一赛道对照原版和 50 毫秒合并两档。[实测步骤](docs/development/rank-batching.md)
+0.5.1 将经过万人比赛实测的名次优化做成了常规修复开关。离线回归同时覆盖开启和关闭两种状态。[名次优化与实测结果](docs/development/rank-batching.md)
 
 ## 生成分发包
 
@@ -48,7 +49,7 @@ py -3 .\scripts\package.py --player-enhancer "$gameDir\Tools\RoadRash30thEnhance
 | 查找内容 | 文档 |
 | --- | --- |
 | 安装、玩法、语音、设置还原及日志 | [玩家指南](docs/players/guide.txt) |
-| 万人比赛的起跑名次、离线验证和玩家对照步骤 | [名次刷新实验](docs/development/rank-batching.md) |
+| 万人比赛名次优化的比较规则、实测结果及开发诊断 | [大型比赛名次优化](docs/development/rank-batching.md) |
 | 连击火焰、游戏调色板、DirectDraw 合成与离屏复核 | [击倒仪表绘制](docs/development/knockdown-sprites.md) |
 | 长跑范围、选线、恢复上车、车辆耐久和下车保护 | [长跑与比赛设置](docs/development/long-run.md) · [车手功能](docs/development/character-features.md) |
 | 历次功能、修复与兼容性记录 | [变更记录](CHANGELOG.md) · [2026-11-17 兼容性记录](docs/history/compatibility-2026-11-17.md) |

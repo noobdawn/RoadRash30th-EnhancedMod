@@ -10,7 +10,9 @@ internal static partial class RuntimePatch
 {
     internal const int RankDispatch = 0x49F8, RankRoutine = 0x16940, RankGridInit = 0x15487;
     internal const int RankTraceTicks = 300, RankHeaderSize = 32, RankRowSize = 32;
-    private const int RankMagic = 0x314B4E52, RankDataOffset = 0x1000, RankNativeOffset = 0x80;
+    private const int RankMagic = 0x324B4E52, RankDataOffset = 0x1000, RankNativeOffset = 0x80;
+    internal const int RankWindowTicks = 3;
+    private const int RankStatsOffset = 28;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool VirtualFreeEx(IntPtr process, IntPtr address, UIntPtr size, uint freeType);
@@ -40,15 +42,16 @@ internal static partial class RuntimePatch
         long state = entry + RankDataOffset;
         return BitConverter.ToInt32(Read(process, state + 16, 4), 0) == RankMagic ? state : 0;
     }
-    internal static void ApplyRankBatch(IntPtr process, long image, int mode, Action<string> log)
+    internal static void ApplyRankBatch(IntPtr process, long image, bool optimize, Action<string> log, bool collectStats = false)
     {
-        if (mode == 0) return;
-        if (mode < 1 || mode > 3) throw new ArgumentOutOfRangeException("mode");
-        int window = mode == 1 ? 0 : mode == 2 ? 3 : 6;
+        if (!optimize && !collectStats) return;
+        int window = optimize ? RankWindowTicks : 0;
+        int statsFlag = collectStats ? 1 : 0;
         long installed = InstalledRankState(process, image);
         if (installed != 0) {
-            if (BitConverter.ToInt32(Read(process, installed + 8, 4), 0) != window)
-                throw new InvalidOperationException("请重新启动比赛程序以切换名次模式。");
+            byte[] header = Read(process, installed, RankHeaderSize);
+            if (BitConverter.ToInt32(header, 8) != window || BitConverter.ToInt32(header, RankStatsOffset) != statsFlag)
+                throw new InvalidOperationException("请重新启动游戏以应用名次设置。");
             return;
         }
         long gate = image + RankDispatch, init = image + RankGridInit;
@@ -75,6 +78,7 @@ internal static partial class RuntimePatch
         try {
             var header = new CodeBuffer(0);
             D(header, image); D(header, roster); D(header, window); D(header, 1); D(header, RankMagic);
+            D(header, 0); D(header, 0); D(header, statsFlag);
             Write(process, state, header.Finish());
             Write(process, entry, RankEntry(entry));
             var reset = new CodeBuffer(entry + 0x20);
@@ -94,7 +98,8 @@ internal static partial class RuntimePatch
             VirtualFreeEx(process, block, UIntPtr.Zero, 0x8000);
             throw;
         }
-        log("起跑名次统计已启用。AI 合并窗口为 " + window + " 个模拟步（0 为原版对照）。");
+        if (optimize) log("已启用大型比赛名次优化。");
+        if (collectStats) log("已启用开发诊断，将记录起跑名次耗时。");
     }
 
     internal sealed class RankTraceFile
@@ -114,6 +119,7 @@ internal static partial class RuntimePatch
                 if (state == 0) state = InstalledRankState(handle, module);
                 if (state == 0) return;
                 byte[] header = Read(handle, state, RankHeaderSize);
+                if (BitConverter.ToInt32(header, RankStatsOffset) == 0) return;
                 int race = BitConverter.ToInt32(header, 12), first = BitConverter.ToInt32(header, 24);
                 if (race == 0 || race != BitConverter.ToInt32(header, 20)) return;
                 // Capture only closed simulation ticks. A long frame or a pause

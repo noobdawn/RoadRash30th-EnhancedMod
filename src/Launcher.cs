@@ -2581,7 +2581,8 @@ internal static partial class RuntimePatch
         decimal sameTrafficSpeed=1m,decimal oppositeTrafficSpeed=1m,bool crazyDrivers=false,bool fallAnimationFix=false,
         bool sameTraffic=true,bool oppositeTraffic=true,bool nearbyImpactAudio=false,bool forceTrackLength=false,int trackLength=1800,
         int opponentIdentity=0,bool opponentsTargetPlayer=false,bool knockdownHud=false,bool knockdownVoice=true,
-        int creditMs=2000,int streakMs=18000,int knockdownsPerVoice=1,bool hardcore=false,bool policePlayer=false,int rankMode=0)
+        int creditMs=2000,int streakMs=18000,int knockdownsPerVoice=1,bool hardcore=false,bool policePlayer=false,
+        bool optimizeRaceRanking=false,bool collectRankStats=false)
     {
         IntPtr baseAddress = IntPtr.Zero;
         for (int i = 0; i < 100; i++)
@@ -2600,7 +2601,7 @@ internal static partial class RuntimePatch
         try
         {
             ApplyRiderRoadGuard(h, base64, log);
-            ApplyRankBatch(h, base64, rankMode, log);
+            ApplyRankBatch(h, base64, optimizeRaceRanking, log, collectRankStats);
             long codeBase = 0;
             long stateBase = 0;
             long spriteBase = 0;

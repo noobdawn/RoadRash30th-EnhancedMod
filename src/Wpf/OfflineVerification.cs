@@ -100,19 +100,30 @@ namespace RoadRash.Workbench
         }
         private static void CheckRankSettings(string output)
         {
-            var settings = new SettingsStore(null);
             string path = Path.Combine(output, "rank-options.ini");
+            var settings = new SettingsStore(null);
+            Check(settings["optimizeRaceRanking"].Kind == "bool" && settings.B("optimizeRaceRanking"), "factory rank optimization is a single enabled switch");
             File.WriteAllText(path, "racers=10000\n");
             settings.Load(path, output);
-            Check(settings.I("rankMode") == 0, "legacy 10000-rider profiles keep stock ranking");
-            for (int mode = 1; mode <= 3; ++mode) {
-                settings.Put("rankMode", mode);
-                settings.ApplyMode("normal");
+            Check(settings.B("optimizeRaceRanking"), "old profiles without a rank option get the factory repair");
+            for (int mode = 0; mode <= 3; ++mode) {
+                File.WriteAllText(path, "rankMode=" + mode + "\nracers=10000\n");
+                settings.Load(path, output);
+                bool expected = mode >= 2;
+                Check(settings.B("optimizeRaceRanking") == expected, "migrate preview rank mode " + mode);
+                settings.ApplyMode("run");
                 settings.Save(path);
                 var restored = new SettingsStore(null);
                 restored.Load(path, output);
-                Check(restored.Valid && restored.I("rankMode") == mode, "ranking selection survives preset, save and reload " + mode);
+                Check(restored.Valid && restored.B("optimizeRaceRanking") == expected && restored.I("racers") == 10000 &&
+                    !SettingsStore.Parse(File.ReadAllLines(path)).ContainsKey("rankMode"), "keep the migrated switch through preset and save " + mode);
             }
+            File.WriteAllText(path, "optimizeRaceRanking=0\nrankMode=3\n");
+            settings.Load(path, output);
+            Check(!settings.B("optimizeRaceRanking"), "explicit switch wins over a stale preview setting");
+            File.WriteAllText(path, "rankMode=invalid\n");
+            settings.Load(path, output);
+            Check(settings.B("optimizeRaceRanking") && settings.LoadWarnings.Count > 0, "invalid preview value recovers to the factory setting");
         }
         private static void CheckRaceRules(string output)
         {
@@ -185,19 +196,15 @@ namespace RoadRash.Workbench
             surface.Measure(new Size(1280, 800)); surface.Arrange(new Rect(0, 0, 1280, 800)); surface.UpdateLayout(); Pump();
             var enemySwitch = window.PublicEnemySwitch;
             var settings = vm.Settings;
-            Check(!Descendants(surface).OfType<ComboBox>().Any(t => t.DataContext is Setting f && f.Key == "rankMode"),
+            Check(!Descendants(surface).OfType<CheckBox>().Any(t => t.DataContext is Setting f && f.Key == "optimizeRaceRanking"),
                 "race setup keeps racer count separate from the AI rank repair");
             vm.Page = vm.Pages.Single(p => p.Title == settings.Strings.Get("page.fixes.title")); Pump(); surface.UpdateLayout();
-            var rank = Descendants(surface).OfType<ComboBox>().Single(t => t.DataContext is Setting f && f.Key == "rankMode");
-            string stockSummary = vm.SummaryFix;
-            rank.SelectedIndex = 1; Pump();
-            Check(vm.SummaryFix == stockSummary, "recording stock timings leaves the enabled repair count at baseline");
-            rank.SelectedIndex = 2; Pump();
-            Check(rank.IsEnabled && settings.I("rankMode") == 2 && rank.Items.Count == 4 && vm.SummaryFix == "已启用 3 项修复",
-                "Fix page offers all four rank choices and counts the 50 ms optimization");
-            rank.SelectedIndex = 3; Pump();
-            Check(vm.SummaryFix == "已启用 3 项修复", "100 ms optimization counts as one repair");
-            rank.SelectedIndex = 0;
+            var rank = Descendants(surface).OfType<CheckBox>().Single(t => t.DataContext is Setting f && f.Key == "optimizeRaceRanking");
+            Check(rank.IsEnabled && rank.IsChecked == true && vm.SummaryFix == "已启用 3 项修复", "Fix page shows the enabled rank repair switch");
+            rank.SetCurrentValue(CheckBox.IsCheckedProperty, false); Pump();
+            Check(!settings.B("optimizeRaceRanking") && vm.SummaryFix == "已启用 2 项修复", "switching off the rank repair updates the model and summary");
+            rank.SetCurrentValue(CheckBox.IsCheckedProperty, true); Pump();
+            Check(settings.B("optimizeRaceRanking") && vm.SummaryFix == "已启用 3 项修复", "switching on the rank repair updates the model and summary");
             vm.Page = vm.Pages[0]; Pump(); surface.UpdateLayout();
             var police = Descendants(surface).OfType<Button>().Single(b=>Equals(b.CommandParameter,"police"));
             police.Command.Execute(police.CommandParameter); Pump();

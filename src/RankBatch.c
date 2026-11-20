@@ -22,8 +22,9 @@ typedef struct {
 typedef struct {
     Byte *image;
     Byte **roster;
-    Word window, race, magic, traceRace, firstTick, lastTick;
+    Word window, race, magic, activeRace, firstTick, collectStats;
     TickRow rows[TRACE_TICKS];
+    Word lastTick;
     int valid, rosterCount, burst;
     Word builtAt, burstAt;
     int slots[HASH_SIZE], edges[5];
@@ -31,7 +32,8 @@ typedef struct {
     int positions[LIMIT], distances[LIMIT];
 } RankState;
 typedef char CheckStateSize[sizeof(RankState) <= 0x80000 ? 1 : -1];
-typedef char CheckTraceLayout[__builtin_offsetof(RankState, rows) == 32 && sizeof(TickRow) == 32 ? 1 : -1];
+typedef char CheckTraceLayout[__builtin_offsetof(RankState, collectStats) == 28 &&
+    __builtin_offsetof(RankState, rows) == 32 && sizeof(TickRow) == 32 ? 1 : -1];
 
 static void sift(int *values, int root, int length) {
     int value = values[root];
@@ -114,26 +116,27 @@ static int snapshotRank(RankState *s, Byte *rider) {
     }
     return r->rank = rank;
 }
-static void startTrace(RankState *s, Word now) {
-    s->traceRace = 0;
-    for (int i = 0; i < TRACE_TICKS; ++i) s->rows[i] = (TickRow){0};
+static void startRace(RankState *s, Word now) {
+    s->activeRace = 0;
+    if (s->collectStats)
+        for (int i = 0; i < TRACE_TICKS; ++i) s->rows[i] = (TickRow){0};
     s->firstTick = now;
     s->valid = 0;
     s->burst = 0;
-    s->traceRace = s->race;
+    s->activeRace = s->race;
 }
 int FAST RankBatch(Byte *rider, RankState *s) {
     Byte *game = s->image;
     StockRank stock = (StockRank)(game + 0x16940);
     if (FIELD(unsigned short, game, 0x218059)) return stock(rider);
     Word now = FIELD(Word, game, 0x2036e8);
-    if (now < s->lastTick && s->traceRace == s->race) ++s->race;
-    if (s->race != s->traceRace) startTrace(s, now);
+    if (now < s->lastTick && s->activeRace == s->race) ++s->race;
+    if (s->race != s->activeRace) startRace(s, now);
     s->lastTick = now;
     Word elapsed = now - s->firstTick;
-    TickRow *row = elapsed < TRACE_TICKS ? &s->rows[elapsed] : (TickRow *)0;
+    TickRow *row = s->collectStats && elapsed < TRACE_TICKS ? &s->rows[elapsed] : (TickRow *)0;
     int player = FIELD(Byte *, rider, 0x1c4) == FIELD(Byte *, game, 0x1a69ec);
-    ReadCounter clock = FIELD(ReadCounter, game, 0x21c3dc);
+    ReadCounter clock = row ? FIELD(ReadCounter, game, 0x21c3dc) : (ReadCounter)0;
     Counter before = 0, after;
     if (row) {
         if (clock) clock(&before);

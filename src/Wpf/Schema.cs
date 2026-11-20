@@ -140,7 +140,7 @@ namespace RoadRash.Workbench
 
             P("fixes", "\uE90F");
             G("repairs");
-            C("rankMode", 4);
+            B("optimizeRaceRanking");
             B("fallAnimationFix");
             B("independentAudio");
             B("nearbyImpactAudio");

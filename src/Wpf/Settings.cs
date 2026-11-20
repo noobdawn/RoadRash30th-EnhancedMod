@@ -170,6 +170,19 @@ namespace RoadRash.Workbench
                 try { if (File.Exists(Path.GetFullPath(overlay, gameDir))) values["overlayCar"] = "1"; } catch (ArgumentException) { }
             }
             var defaults = Defaults();
+            bool hadRankMode = values.Remove("rankMode", out string oldRankMode);
+            if (!values.ContainsKey("optimizeRaceRanking"))
+            {
+                string rankSetting = defaults["optimizeRaceRanking"];
+                if (hadRankMode)
+                {
+                    if (int.TryParse(oldRankMode, NumberStyles.Integer, CultureInfo.InvariantCulture, out int mode) && mode >= 0 && mode <= 3)
+                        rankSetting = mode >= 2 ? "1" : "0";
+                    else
+                        LoadWarnings.Add(this["optimizeRaceRanking"].Label + "：旧值无效，已恢复默认。");
+                }
+                values["optimizeRaceRanking"] = rankSetting;
+            }
             batch = true;
             try
             {

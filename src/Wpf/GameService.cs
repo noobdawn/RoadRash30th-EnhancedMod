@@ -92,6 +92,7 @@ namespace RoadRash.Workbench
             string overlayPath = overlay ? Path.GetFullPath(s.S("overlayImage"), gameDir) : "";
             if (overlay && !File.Exists(overlayPath)) throw new FileNotFoundException("找不到叠加图片，请修改路径或关闭图片叠加。", overlayPath);
             bool shell = s.B("carShell") && !overlay && !debug, collision = s.B("carCollision") && !shell;
+            bool collectRankStats = Environment.GetEnvironmentVariable("ROADRASH_RANK_STATS") == "1";
             Launcher.GameDir = gameDir;
             Process process = Process.Start(new ProcessStartInfo(Path.Combine(gameDir, "RoadRash95.exe")) { WorkingDirectory = gameDir, UseShellExecute = false });
             var patchLog = new StringBuilder();
@@ -111,13 +112,13 @@ namespace RoadRash.Workbench
                     s.B("sameTraffic"), s.B("oppositeTraffic"), s.B("nearbyImpactAudio"), s.B("forceTrackLength"), TrackLengthUnits.ToBlocks(s.D("trackLengthKm")),
                     OpponentIdentity(s), s.B("opponentsTargetPlayer"), s.B("knockdownHud"), s.B("knockdownVoice"),
                     (int)(1000 * s.D("knockdownCreditSeconds")), (int)(1000 * s.D("streakSeconds")), s.I("knockdownsPerVoice"),
-                    s.B("hardcore"), s.B("policePlayer"), s.I("rankMode")));
+                    s.B("hardcore"), s.B("policePlayer"), s.B("optimizeRaceRanking"), collectRankStats));
                 if (patchFailed) throw new InvalidOperationException("部分运行时补丁未能完成，请查看具体日志。");
                 Report("运行时补丁已写入。");
                 if (overlay) SpawnHelper(gameDir, "--overlay", process.Id.ToString(CultureInfo.InvariantCulture), overlayPath);
                 var watch = new List<string> { "--watch", process.Id.ToString(CultureInfo.InvariantCulture) };
                 if (s.B("independentAudio")) watch.Add("--audio-diagnostics");
-                if (s.I("rankMode") != 0) watch.Add("--rank-stats");
+                if (collectRankStats) watch.Add("--rank-stats");
                 SpawnHelper(gameDir, watch.ToArray());
             }
             catch (Exception ex) { Report("游戏已启动，但补丁未全部完成：" + ex.Message); throw new InvalidOperationException("游戏已启动，但补丁未全部完成。请退出游戏后查看日志再重试。\n" + ex.Message, ex); }

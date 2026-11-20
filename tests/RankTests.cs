@@ -10,7 +10,8 @@ internal static partial class RaceTests
     private delegate int RankCall(IntPtr rider);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     private delegate int RankClock(out long timestamp);
-    private static readonly RankClock FixtureClock = delegate(out long timestamp) { timestamp = Stopwatch.GetTimestamp(); return 1; };
+    private static int clockReads;
+    private static readonly RankClock FixtureClock = delegate(out long timestamp) { ++clockReads; timestamp = Stopwatch.GetTimestamp(); return 1; };
     private static RankCall CallRank(long target) {
         return (RankCall)Marshal.GetDelegateForFunctionPointer(new IntPtr(target), typeof(RankCall));
     }
@@ -18,9 +19,12 @@ internal static partial class RaceTests
         if (source != null) using (SHA256 sha = SHA256.Create())
             Check(BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(source))).Replace("-","").ToLowerInvariant() == RankBatchNative.SourceSha256,
                 "ranking machine code matches the tracked C source");
-        for (int mode = 0; mode <= 3; ++mode) CheckRankMode(path, mode);
+        CheckRankMode(path, false, false);
+        CheckRankMode(path, true, false);
+        CheckRankMode(path, false, true);
+        CheckRankMode(path, true, true);
     }
-    private static void CheckRankMode(string path, int mode) {
+    private static void CheckRankMode(string path, bool optimize, bool collectStats) {
         const int n = 10000, stride = 0x208, requests = 3000;
         long image = MapGame(path), table = image + 0xB0000, riders = Alloc(n * stride), roads = Alloc(0x400);
         // This fixture maps a local copy into the test process. A synthetic
@@ -50,16 +54,18 @@ internal static partial class RaceTests
         var expected = new int[requests];
         for (int i = 0; i < requests; ++i) expected[i] = stock(new IntPtr(riders + i * stride));
         IntPtr self = Process.GetCurrentProcess().Handle;
-        RuntimePatch.ApplyRankBatch(self, image, mode, delegate {});
-        if (mode == 0) {
+        RuntimePatch.ApplyRankBatch(self, image, optimize, delegate {}, collectStats);
+        if (!optimize && !collectStats) {
             Check(Get(image + RuntimePatch.RankDispatch + 1) == RuntimePatch.RankRoutine - RuntimePatch.RankDispatch - 5,
-                "default mode leaves stock ranking installed");
+                "turning off the player switch leaves stock ranking installed");
             return;
         }
-        RuntimePatch.ApplyRankBatch(self, image, mode, delegate {});
+        RuntimePatch.ApplyRankBatch(self, image, optimize, delegate {}, collectStats);
         long entry = image + RuntimePatch.RankDispatch + 5 + Get(image + RuntimePatch.RankDispatch + 1);
         long state = (uint)Get(entry + 1), row = state + RuntimePatch.RankHeaderSize;
+        Check(Get(state + 8) == (optimize ? 3 : 0), "production and diagnostic launches use the same fixed interval");
         bool equal = true;
+        int initialClockReads = clockReads;
         var time = Stopwatch.StartNew();
         for (int i = 0; i < requests; ++i) {
             long r = riders + i * stride;
@@ -67,14 +73,24 @@ internal static partial class RaceTests
             equal &= rank == expected[i] && Get(r + 0x1fc) == rank && Get(r + 0x1f4) == (i == 0 ? 84 : 140);
         }
         time.Stop();
-        Check(equal, "3000 burst results and deadlines match the original binary mode=" + mode);
-        Check(Get(row) == 1 && Get(row + 4) == 0 && Get(row + 8) == requests - 1 && Get(row + 12) + Get(row + 20) == requests &&
-            Get(row + 16) == (mode == 1 ? 0 : 1) && Marshal.ReadInt64(new IntPtr(row + 24)) > 0, "separate player/reload/scan/build counts and timing mode=" + mode);
-        Console.WriteLine("RANK BENCH 10000 racers, 3000 original CALL sites, mode={0}, elapsed_ms={1:F3}, scans={2}, builds={3}, indexed={4}",
-            mode, time.Elapsed.TotalMilliseconds, Get(row + 12), Get(row + 16), Get(row + 20));
-        byte[] raw = new byte[RuntimePatch.RankRowSize]; Marshal.Copy(new IntPtr(row),raw,0,raw.Length);
-        Check(RuntimePatch.FormatRankCsv(raw,5,Get(state+8)).Contains("5,"+Get(state+8)+",1,0,2999,"), "CSV reports the actual closed tick and mode");
-        if (mode == 1) {
+        Check(equal, "3000 burst results and deadlines match stock: optimization=" + optimize + " diagnostics=" + collectStats);
+        if (collectStats) {
+            Check(Get(row) == 1 && Get(row + 4) == 0 && Get(row + 8) == requests - 1 &&
+                Get(row + 12) == (optimize ? 30 : requests) && Get(row + 20) == (optimize ? requests - 30 : 0) &&
+                Get(row + 16) == (optimize ? 1 : 0) && Marshal.ReadInt64(new IntPtr(row + 24)) > 0, "developer diagnostics count stock scans, builds and indexed lookups");
+            Console.WriteLine("RANK BENCH 10000 racers, 3000 original CALL sites, optimize={0}, elapsed_ms={1:F3}, scans={2}, builds={3}, indexed={4}",
+                optimize, time.Elapsed.TotalMilliseconds, Get(row + 12), Get(row + 16), Get(row + 20));
+        } else {
+            Check(initialClockReads == clockReads && Get(row) == 0 && Get(row + 12) == 0 && Get(row + 20) == 0,
+                "player optimization makes no timing calls and collects no rank counters");
+            string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rank-play-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            Put(image + 0x2036E8, 6);
+            using (Process test = Process.GetCurrentProcess()) new RuntimePatch.RankTraceFile().PollImage(test, dir, image);
+            Check(Directory.GetFiles(dir).Length == 0, "ordinary play produces no rank CSV even when polled");
+            Put(image + 0x2036E8, 5);
+        }
+        if (!optimize) {
             string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"rank-trace-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             var writer = new RuntimePatch.RankTraceFile();
@@ -94,7 +110,7 @@ internal static partial class RaceTests
             return;
         }
         IntPtr q = new IntPtr(riders + stride);
-        int cached = expected[1], window = mode == 2 ? 3 : 6;
+        int cached = expected[1], window = RuntimePatch.RankWindowTicks;
         Put(q.ToInt64() + 0x1f8, 1); Put(q.ToInt64() + 0x1c, int.MaxValue);
         Put(image + 0x2036E8, 5 + window - 1);
         Check(timed(q) == cached && stock(q) != cached, "shared window includes its last tick and handles repeated requests");
@@ -119,17 +135,17 @@ internal static partial class RaceTests
         Put(image + 0x18F1D8, n + 1);
         Check(Get(state + 12) == epoch + 1 && timed(q) == stock(q), "new grid at identical tick invalidates the prior snapshot");
         Put(image + 0x2036E8, 1);
-        Check(timed(q) == stock(q) && Get(state + 24) == 1, "rewound race clock starts a fresh trace");
+        Check(timed(q) == stock(q) && Get(state + 24) == 1, "rewound race clock invalidates the old ranking snapshot");
         for (int i = 0; i < 16; ++i) timed(q);
         Put(image + 0x18f1d8, 128); // The native count includes one extra slot.
         int scans = Get(row + 12), builds = Get(row + 16);
         bool smallMatches = true;
         for (int i = 0; i < 20; ++i) smallMatches &= timed(q) == stock(q);
-        Check(smallMatches && Get(row + 12) == scans + 20 && Get(row + 16) == builds,
+        Check(smallMatches && (!collectStats || (Get(row + 12) == scans + 20 && Get(row + 16) == builds)),
             "roster shrink invalidates the index and dense requests on a small grid stay stock");
         Put(image + 0x18f1d8, 129);
         for (int i = 0; i < 16; ++i) timed(q);
-        Check(Get(row + 16) == builds + 1 && timed(q) == stock(q),
+        Check((!collectStats || Get(row + 16) == builds + 1) && timed(q) == stock(q),
             "128 actual riders qualify for a fresh index on the sixteenth AI request");
     }
 }

@@ -12,7 +12,7 @@
 
 玩家操作说明位于 `docs/players/`，算法、架构及验证方法位于 `docs/development/`，历次阶段验收位于 `docs/history/`。通用安装与构建入口在根目录 README 中。
 
-本机已有依赖缓存时，可运行 `scripts/build.ps1 -Offline`。名次回归由 `scripts/test.ps1 -GameDirectory 游戏目录` 在测试进程中完成。完整比赛由玩家手动运行并提供帧时间及 CSV。[名次对照步骤](docs/development/rank-batching.md)
+本机已有依赖缓存时，可运行 `scripts/build.ps1 -Offline`。名次回归由 `scripts/test.ps1 -GameDirectory 游戏目录` 在测试进程中完成。如需补充实机数据，由玩家手动运行开发诊断并提供帧时间及 CSV。[名次诊断步骤](docs/development/rank-batching.md)
 
 1. WPF 界面使用 .NET 10、C# 与 CommunityToolkit.Mvvm；共享的 `src/*.cs` 和兼容桥接仍须保持 Framework 4.x 编译器兼容。运行时补丁算法不应依赖界面对象。
 2. 常规修改执行 `scripts/build.ps1`、`scripts/test.ps1` 与 `scripts/test-wpf.ps1`；改动汽车选帧或 MIDI 解析时，加跑带 `-GameDirectory` 的对应集成验证。

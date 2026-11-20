@@ -69,15 +69,7 @@ namespace RoadRash.Workbench
         public string SummaryDisplay => (Settings.B("hd") ? "高清宽屏" : "经典画面") + "  ·  " + Settings.S("frameRate") + " FPS";
         public string SummaryTraffic => (Settings.B("sameTraffic") || Settings.B("oppositeTraffic") ? "汽车 ×" + Settings.S("traffic") + "（" + (Settings.B("sameTraffic") ? (Settings.B("oppositeTraffic") ? "双向" : "同向") : "对向") + "）" : "无普通交通车") + "  /  警车 ×" + Settings.S("police");
         public string SummarySpeed => "玩家 ×" + Settings.S("playerWalkSpeed") + "  /  AI ×" + Settings.S("aiWalkSpeed");
-        public string SummaryFix
-        {
-            get
-            {
-                int count = new[] { "independentAudio", "fallAnimationFix", "nearbyImpactAudio" }.Count(Settings.B);
-                if (Settings.I("rankMode") >= 2) count++;
-                return "已启用 " + count + " 项修复";
-            }
-        }
+        public string SummaryFix => "已启用 " + new[] { "optimizeRaceRanking", "independentAudio", "fallAnimationFix", "nearbyImpactAudio" }.Count(Settings.B) + " 项修复";
         public string SummaryFeatures => string.Join("\n", new[] { "hideFallenVehicles", "aiRunVariation", "crazyDrivers", "infiniteDurability", "onFootProtection", "forceOpponent", "policeOpponents", "opponentsTargetPlayer" }
             .Where(k => Settings.B(k) && Settings[k].Enabled)
             .Select(k => "•  " + Settings[k].Label + (k == "forceOpponent" ? " · " + Choice("opponentRider") : "")));
