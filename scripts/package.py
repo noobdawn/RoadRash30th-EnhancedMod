@@ -8,7 +8,9 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = '暴力摩托增强修改器.exe'
+LEGACY_ENTRY = '暴力摩托增强启动器.exe'
 SOURCE_FILES = (
+    'src/LegacyEntry/Program.cs',
     'src/RankBatch.c', 'src/LauncherRank.cs', 'src/LauncherRankNative.cs', 'tests/RankTests.cs', 'docs/development/rank-batching.md',
     'src/LauncherKnockdown.cs', 'src/LauncherKnockdownNative.cs', 'src/Knockdown.c',
     'assets/knockdown-hud.png', 'scripts/import-knockdown-voice.py', 'tests/KnockdownTests.cs',
@@ -93,7 +95,7 @@ def main():
         player = {name: data for name, data in source.items()
                   if name.startswith(('docs/', 'third_party/', 'dependencies/'))
                   or name in ('README.md', 'LICENSE', 'THIRD_PARTY.md', 'CHANGELOG.md', 'VERSION')}
-        player.update({LAUNCHER: binary,
+        player.update({LAUNCHER: binary, LEGACY_ENTRY: (args.binary_dir / LEGACY_ENTRY).read_bytes(),
                        'launcher_settings.example.ini': source['config/launcher_settings.example.ini'],
                        'Tools/player_car.png': source['assets/player_car.png'],
                        'Tools/import-knockdown-voice.py': source['scripts/import-knockdown-voice.py'],
@@ -114,7 +116,7 @@ def main():
             if len(enhancer) != expected['bytes'] or digest(enhancer) != expected['sha256']:
                 raise ValueError('Player edition requires the verified v1.1.0 enhancer')
             player = {n: data for n, data in player.items() if n.startswith(('Tools/', 'third_party/'))
-                      or n in (LAUNCHER, 'LICENSE', 'VERSION',
+                      or n in (LAUNCHER, LEGACY_ENTRY, 'LICENSE', 'VERSION',
                                'THIRD_PARTY.md', 'CHANGELOG.md', 'dependencies/verified-files.json')}
             player['Tools/' + name] = enhancer
             player['安装说明.txt'] = source['docs/players/guide.txt']

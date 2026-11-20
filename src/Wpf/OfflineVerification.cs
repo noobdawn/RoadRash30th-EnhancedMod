@@ -185,6 +185,15 @@ namespace RoadRash.Workbench
             surface.Measure(new Size(1280, 800)); surface.Arrange(new Rect(0, 0, 1280, 800)); surface.UpdateLayout(); Pump();
             var enemySwitch = window.PublicEnemySwitch;
             var settings = vm.Settings;
+            Check(!Descendants(surface).OfType<ComboBox>().Any(t => t.DataContext is Setting f && f.Key == "rankMode"),
+                "race setup keeps racer count separate from the AI rank repair");
+            vm.Page = vm.Pages.Single(p => p.Title == settings.Strings.Get("page.fixes.title")); Pump(); surface.UpdateLayout();
+            var rank = Descendants(surface).OfType<ComboBox>().Single(t => t.DataContext is Setting f && f.Key == "rankMode");
+            rank.SelectedIndex = 2; Pump();
+            Check(rank.IsEnabled && settings.I("rankMode") == 2 && rank.Items.Count == 4,
+                "Fix page offers all four rank choices and selects the 50 ms mode");
+            rank.SelectedIndex = 0;
+            vm.Page = vm.Pages[0]; Pump(); surface.UpdateLayout();
             var police = Descendants(surface).OfType<Button>().Single(b=>Equals(b.CommandParameter,"police"));
             police.Command.Execute(police.CommandParameter); Pump();
             var hard = Descendants(surface).OfType<CheckBox>().Single(b=>b.DataContext is Setting f && f.Key=="hardcore");

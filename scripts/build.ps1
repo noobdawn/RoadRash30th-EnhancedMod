@@ -27,7 +27,17 @@ if ($BuildOnly) { & $DotNet build $project -c Release --nologo @restoreArgs }
 else { & $DotNet publish $project -c Release -r win-x64 --self-contained true -o $destination --nologo @restoreArgs }
 if ($LASTEXITCODE -ne 0) { throw "WPF build failed: $LASTEXITCODE" }
 if (-not $BuildOnly) {
-    Move-Item -LiteralPath (Join-Path $destination 'RoadRash30thLauncher.exe') -Destination (Join-Path $destination '暴力摩托增强修改器.exe') -Force
+    $modifier = Join-Path $destination '暴力摩托增强修改器.exe'
+    Move-Item -LiteralPath (Join-Path $destination 'RoadRash30thLauncher.exe') -Destination $modifier -Force
+    $legacyEntry = Join-Path $destination '暴力摩托增强启动器.exe'
+    $version = (Get-Item -LiteralPath $modifier).VersionInfo
+    $versionSource = Join-Path $root 'artifacts\LegacyEntryVersion.cs'
+    [IO.File]::WriteAllLines($versionSource, @(
+        ('[assembly: System.Reflection.AssemblyVersion("{0}")]' -f $version.FileVersion),
+        ('[assembly: System.Reflection.AssemblyInformationalVersion("{0}")]' -f $version.ProductVersion)
+    ))
+    & $compiler /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 /r:System.Windows.Forms.dll "/win32icon:$root\assets\workbench.ico" "/out:$legacyEntry" (Join-Path $root 'src\LegacyEntry\Program.cs') $versionSource
+    if ($LASTEXITCODE -ne 0) { throw "Legacy entry build failed: $LASTEXITCODE" }
     Copy-Item -LiteralPath (Join-Path $root 'docs\players\guide.txt') -Destination (Join-Path $destination 'Tools\LAUNCHER_README.txt') -Force
     $notices = Join-Path $destination 'Tools\licenses'
     [IO.Directory]::CreateDirectory($notices) | Out-Null

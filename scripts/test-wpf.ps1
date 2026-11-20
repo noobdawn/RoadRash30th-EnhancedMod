@@ -12,6 +12,13 @@ $mode = if ($RenderUi) { '--render-ui' } else { '--self-test' }
 $p = Start-Process -FilePath $launcher -ArgumentList @($mode, ('"' + $out + '"')) -WindowStyle Hidden -Wait -PassThru
 if ($p.ExitCode -ne 0) { Get-Content (Join-Path $out 'results.txt') -Tail 10; throw 'WPF verification failed.' }
 Get-Content (Join-Path $out 'results.txt') -Tail 1
+$legacy = Join-Path ([IO.Path]::GetFullPath($BinaryDirectory)) '暴力摩托增强启动器.exe'
+if ((Get-Item -LiteralPath $legacy).VersionInfo.ProductVersion -ne (Get-Item -LiteralPath $launcher).VersionInfo.ProductVersion) { throw 'The two entry points report different versions.' }
+$export = Join-Path $out '旧入口 语言.json'
+$p = Start-Process -FilePath $legacy -ArgumentList @('--export-localization', ('"' + $export + '"')) -WindowStyle Hidden -Wait -PassThru
+if ($p.ExitCode -ne 0 -or !(Test-Path -LiteralPath $export)) { throw 'Legacy entry did not forward the export request.' }
+if ((Get-FileHash -LiteralPath $export).Hash -ne (Get-FileHash -LiteralPath (Join-Path $root 'config\locales\zh-CN.json')).Hash) { throw 'Legacy entry loaded a different build.' }
+'PASS legacy filename forwards a quoted output path to the current modifier'
 if ($GameDirectory) {
     # Derive a pristine fixture from the existing enhancement tool's baseline.
     # All mutations below target this new fixture, never the live game directory.

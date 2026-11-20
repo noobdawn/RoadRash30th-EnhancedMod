@@ -78,7 +78,7 @@ py -3 -B .\tests\knockdown_sprite_replay.py $game $testDir
 $history = 'D:\开发归档\repository\artifacts\knockdown'
 $prior = "$history/native-sprite/build/RoadRash30thLauncher.exe"
 $baseline = "$history/meter-strip/previous-entrypoints/game/RoadRash30thLauncher.exe"
-py -3 -B .\tests\knockdown_atlas_audit.py $game "$game/暴力摩托增强启动器.exe" "$testDir/KnockdownTests.exe" "$testDir/atlas" --prior-palette $prior --baseline-launcher $baseline
+py -3 -B .\tests\knockdown_atlas_audit.py $game "$game/暴力摩托增强修改器.exe" "$testDir/KnockdownTests.exe" "$testDir/atlas" --prior-palette $prior --baseline-launcher $baseline
 ```
 
 本机取证文件的 SHA-256 为 `ebeb435deb70a2ca20a4a7c0f89aa425eb4d098588967fc1814930bf46e44638`（游戏）和 `f14b3d5447a2b452e6e371b0b01acdd345d6cd9d7d70cf7c155cb3427e139609`（HD）。
